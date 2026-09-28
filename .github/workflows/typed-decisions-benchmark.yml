@@ -1,7 +1,7 @@
 name: typed-decisions paired benchmark
 
 concurrency:
-  group: typed-decisions-benchmark
+  group: typed-decisions-full
   cancel-in-progress: true
 
 on:
@@ -9,7 +9,6 @@ on:
 
 jobs:
   typed-decisions:
-    if: false  # temporarily paused while the benchmark execution strategy is redesigned
     environment: typesafe
     runs-on: ubuntu-latest
     timeout-minutes: 120
