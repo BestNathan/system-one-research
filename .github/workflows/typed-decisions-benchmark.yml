@@ -6,12 +6,6 @@ concurrency:
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/typed-decisions-benchmark.yml"
-      - "experiments/typed_decisions/**"
-      - "requirements.txt"
 
 jobs:
   typed-decisions:
