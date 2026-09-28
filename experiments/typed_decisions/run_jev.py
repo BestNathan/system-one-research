@@ -17,6 +17,7 @@ from common import (
     option_keys,
     parse_json,
     record_from_probs,
+    select_cases_per_workflow,
     summarize,
 )
 
@@ -62,9 +63,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="jev-1.13.0")
     ap.add_argument("--output", type=Path, required=True)
+    ap.add_argument("--cases-per-workflow", type=int, default=0)
     args = ap.parse_args()
 
     ds = load_dataset(DATASET, "all", split="test", revision=DATASET_REVISION)
+    ds = select_cases_per_workflow(ds, args.cases_per_workflow)
     backend = JevBackend(args.model)
 
     decision_rows = []
