@@ -225,3 +225,18 @@ def summarize(rows: list[dict[str, Any]], case_latencies: list[float] | None = N
         out["batched_ms_per_case"] = (1000 * scoring_seconds / cases) if cases else None
         out["batched_decisions_per_second"] = len(rows) / scoring_seconds if scoring_seconds > 0 else None
     return out
+
+
+def select_cases_per_workflow(ds, per_workflow: int):
+    """Deterministically keep the first N cases from each workflow."""
+    if per_workflow <= 0:
+        return ds
+    counts = defaultdict(int)
+    indexes = []
+    for i, row in enumerate(ds):
+        workflow = str(row["workflow"])
+        if counts[workflow] >= per_workflow:
+            continue
+        counts[workflow] += 1
+        indexes.append(i)
+    return ds.select(indexes)
