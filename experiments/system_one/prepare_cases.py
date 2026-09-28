@@ -36,7 +36,7 @@ def synthetic():
     return rows
 
 def banking(limit=154):
-    ds=load_dataset("PolyAI/banking77",split="test")
+    ds=load_dataset("parquet", data_files="https://huggingface.co/datasets/PolyAI/banking77/resolve/a00bafa8d1db84baced2c9032e3f227f9c486cb2/data/test-00000-of-00001.parquet", split="train")
     # deterministic balanced-ish sample: first two examples per label, then fill.
     seen={}; chosen=[]
     for row in ds:
