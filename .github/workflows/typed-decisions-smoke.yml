@@ -1,0 +1,87 @@
+name: typed-decisions smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/typed-decisions-smoke.yml"
+      - "experiments/typed_decisions/**"
+      - "requirements.txt"
+  workflow_dispatch:
+
+concurrency:
+  group: typed-decisions-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    environment: typesafe
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      USE_TF: "0"
+      USE_TORCH: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      PIP_DEFAULT_TIMEOUT: "60"
+      PIP_RETRIES: "10"
+      HF_HOME: "${{ github.workspace }}/.cache/huggingface"
+      HUGGINGFACE_HUB_CACHE: "${{ github.workspace }}/.cache/huggingface/hub"
+      TYPESAFE_API_KEY: "${{ secrets.TYPESAFE_API_KEY }}"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Cache Hugging Face datasets and Laya checkpoints
+        uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: typed-decisions-hf-${{ runner.os }}-v2
+          restore-keys: |
+            typed-decisions-hf-${{ runner.os }}-
+
+      - name: Install experiment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --prefer-binary -r requirements.txt
+
+      - name: Smoke base Laya
+        run: |
+          python experiments/typed_decisions/run_laya_batched.py \
+            --model convaiinnovations/laya \
+            --cases-per-workflow 1 \
+            --output results/typed_decisions_smoke/base_laya
+
+      - name: Smoke Laya typed specialist
+        run: |
+          python experiments/typed_decisions/run_laya_batched.py \
+            --model convaiinnovations/laya-typed-decisions \
+            --cases-per-workflow 1 \
+            --output results/typed_decisions_smoke/laya_typed
+
+      - name: Smoke TypeSafe Jev
+        run: |
+          test -n "$TYPESAFE_API_KEY" || { echo "TYPESAFE_API_KEY is not available from the typesafe environment"; exit 2; }
+          python experiments/typed_decisions/run_jev.py \
+            --model jev-1.13.0 \
+            --cases-per-workflow 1 \
+            --output results/typed_decisions_smoke/jev
+
+      - name: Verify smoke outputs
+        run: |
+          python experiments/typed_decisions/verify_smoke.py \
+            --base results/typed_decisions_smoke/base_laya/summary.json \
+            --typed results/typed_decisions_smoke/laya_typed/summary.json \
+            --jev results/typed_decisions_smoke/jev/summary.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: typed-decisions-smoke
+          path: results/typed_decisions_smoke
+          if-no-files-found: warn
