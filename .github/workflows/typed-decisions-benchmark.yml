@@ -18,6 +18,8 @@ jobs:
       USE_TF: "0"
       USE_TORCH: "1"
       TOKENIZERS_PARALLELISM: "false"
+      PIP_DEFAULT_TIMEOUT: "60"
+      PIP_RETRIES: "10"
       HF_HOME: "${{ github.workspace }}/.cache/huggingface"
       HUGGINGFACE_HUB_CACHE: "${{ github.workspace }}/.cache/huggingface/hub"
       TYPESAFE_API_KEY: "${{ secrets.TYPESAFE_API_KEY }}"
