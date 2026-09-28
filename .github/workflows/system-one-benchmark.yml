@@ -1,0 +1,61 @@
+name: system-one benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Benchmark suite
+        required: true
+        default: smoke
+        type: choice
+        options: [smoke, core, feishu]
+      run_jev:
+        description: Run Jev API comparison (requires TYPESAFE_API_KEY secret)
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  laya:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      USE_TF: "0"
+      USE_TORCH: "1"
+      TOKENIZERS_PARALLELISM: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install benchmark dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "laya==0.3.21" httpx numpy psutil
+      - name: Run Laya benchmark
+        run: python experiments/system_one/run.py --backend laya --suite "${{ inputs.suite }}" --output results/laya
+      - uses: actions/upload-artifact@v4
+        with:
+          name: laya-${{ inputs.suite }}
+          path: results/laya
+
+  jev:
+    if: ${{ inputs.run_jev }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install benchmark dependencies
+        run: python -m pip install httpx numpy
+      - name: Run Jev benchmark
+        run: python experiments/system_one/run.py --backend jev --suite "${{ inputs.suite }}" --output results/jev
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jev-${{ inputs.suite }}
+          path: results/jev
