@@ -2,6 +2,7 @@ import argparse, json, os, statistics, time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+# CI smoke target: validate the complete Laya load -> decision -> artifact path.
 
 def load_cases(suite):
     rows=[json.loads(x) for x in (ROOT/"cases.jsonl").read_text(encoding="utf-8").splitlines() if x.strip()]
