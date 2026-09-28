@@ -1,4 +1,4 @@
-name: laya smoke
+name: laya-vs-jev research
 
 on:
   workflow_dispatch:
@@ -6,36 +6,60 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/system-one-benchmark.yml"
+      - "requirements.txt"
       - "experiments/system_one/**"
 
 jobs:
-  laya-smoke:
+  benchmark:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 120
     env:
       USE_TF: "0"
       USE_TORCH: "1"
       TOKENIZERS_PARALLELISM: "false"
+      HF_HOME: "${{ github.workspace }}/.cache/huggingface"
+      HUGGINGFACE_HUB_CACHE: "${{ github.workspace }}/.cache/huggingface/hub"
+      LAYA_MODEL: "convaiinnovations/laya"
+      LAYA_DEVICE: "cpu"
+      TYPESAFE_API_KEY: "${{ secrets.TYPESAFE_API_KEY }}"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install Laya
+
+      - name: Cache Hugging Face / Laya model
+        uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: laya-hf-${{ runner.os }}-convaiinnovations-laya-v1
+          restore-keys: |
+            laya-hf-${{ runner.os }}-convaiinnovations-laya-
+
+      - name: Install experiment
         run: |
           python -m pip install --upgrade pip
-          python -m pip install "laya==0.3.21" numpy psutil
-          python -c "import laya; print('laya import ok')"
-      - name: Run Laya smoke flow
-        run: python experiments/system_one/run.py --backend laya --suite smoke --output results/laya
-      - name: Show result
-        if: always()
+          python -m pip install -r requirements.txt
+
+      - name: Prepare frozen evaluation cases
+        run: python experiments/system_one/prepare_cases.py --output results/cases.jsonl --banking-limit 154
+
+      - name: Run Laya
+        run: python experiments/system_one/benchmark.py --backend laya --cases results/cases.jsonl --output results/laya
+
+      - name: Run TypeSafe Jev
         run: |
-          test -f results/laya/summary.json && cat results/laya/summary.json || true
-          test -f results/laya/raw.jsonl && cat results/laya/raw.jsonl || true
+          test -n "$TYPESAFE_API_KEY" || { echo "TYPESAFE_API_KEY secret is not available to this workflow"; exit 2; }
+          python experiments/system_one/benchmark.py --backend jev --cases results/cases.jsonl --output results/jev
+
+      - name: Generate research report
+        run: |
+          python experiments/system_one/report.py             --laya results/laya/summary.json             --jev results/jev/summary.json             --output results/REPORT.md
+          cat results/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: laya-smoke
-          path: results/laya
-          if-no-files-found: warn
+          name: system-one-research
+          path: results
+          if-no-files-found: error
