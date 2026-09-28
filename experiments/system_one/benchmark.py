@@ -2,15 +2,19 @@ import argparse, json, math, statistics
 from pathlib import Path
 from backends import create_backend
 
-def confidence(a):
-    for k in ("confidence","answer_confidence","probability"):
-        if isinstance(a,dict) and isinstance(a.get(k),(int,float)): return float(a[k])
-    return None
-
 def predicted(a):
     if not isinstance(a,dict): return a
     for k in ("choice","answer","value","noul","score"):
         if k in a: return a[k]
+    return None
+
+def confidence(a):
+    for k in ("confidence","answer_confidence","probability"):
+        if isinstance(a,dict) and isinstance(a.get(k),(int,float)): return float(a[k])
+    if isinstance(a,dict) and isinstance(a.get("probabilities"),dict):
+        p=predicted(a)
+        v=a["probabilities"].get(p)
+        if isinstance(v,(int,float)): return float(v)
     return None
 
 def percentile(xs,p):
