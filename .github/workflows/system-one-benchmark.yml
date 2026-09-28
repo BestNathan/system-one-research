@@ -48,15 +48,34 @@ jobs:
       - name: Run Laya
         run: python experiments/system_one/benchmark.py --backend laya --cases results/cases.jsonl --output results/laya
 
+      - name: Prepare small action-space cases
+        run: python experiments/system_one/prepare_small_action_cases.py --output results/small_action_cases.jsonl --examples-per-intent 5
+
+      - name: Run Laya small action-space
+        run: python experiments/system_one/benchmark.py --backend laya --cases results/small_action_cases.jsonl --output results/small_action/laya
+
       - name: Run TypeSafe Jev
         run: |
           test -n "$TYPESAFE_API_KEY" || { echo "TYPESAFE_API_KEY secret is not available to this workflow"; exit 2; }
           python experiments/system_one/benchmark.py --backend jev --cases results/cases.jsonl --output results/jev
 
+      - name: Run TypeSafe Jev small action-space
+        run: python experiments/system_one/benchmark.py --backend jev --cases results/small_action_cases.jsonl --output results/small_action/jev
+
       - name: Generate research report
         run: |
           python experiments/system_one/report.py             --laya results/laya/summary.json             --jev results/jev/summary.json             --output results/REPORT.md
           cat results/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Generate small action-space report
+        run: |
+          python experiments/system_one/report_small_action.py \
+            --laya-small results/small_action/laya/raw.jsonl \
+            --jev-small results/small_action/jev/raw.jsonl \
+            --laya-baseline results/laya/summary.json \
+            --jev-baseline results/jev/summary.json \
+            --output results/SMALL_ACTION_REPORT.md
+          cat results/SMALL_ACTION_REPORT.md >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         if: always()
