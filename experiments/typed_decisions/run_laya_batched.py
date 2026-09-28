@@ -16,6 +16,7 @@ from common import (
     option_keys,
     parse_json,
     record_from_probs,
+    select_cases_per_workflow,
     summarize,
 )
 
@@ -110,6 +111,7 @@ def main():
     ap.add_argument("--model", required=True)
     ap.add_argument("--output", type=Path, required=True)
     ap.add_argument("--device", default="cpu")
+    ap.add_argument("--cases-per-workflow", type=int, default=0)
     args = ap.parse_args()
 
     torch.set_num_threads(min(8, max(1, os.cpu_count() or 2)))
@@ -126,6 +128,7 @@ def main():
     agent.model.eval()
 
     ds = load_dataset(DATASET, "all", split="test", revision=DATASET_REVISION)
+    ds = select_cases_per_workflow(ds, args.cases_per_workflow)
 
     cases = []
     meta = []
