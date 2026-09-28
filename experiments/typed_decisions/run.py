@@ -123,6 +123,15 @@ def predicted_label(answer: dict[str, Any], keys: list[str], qtype: str) -> str 
 
 class LayaBackend:
     def __init__(self, model: str, device: str):
+        import torch
+        # Laya's own CPU benchmark guidance: one model forward per call has
+        # nothing useful for inter-op parallelism to overlap. Pinning inter-op
+        # to 1 avoids severe oversubscription on shared CI runners.
+        torch.set_num_threads(min(8, max(1, os.cpu_count() or 2)))
+        try:
+            torch.set_num_interop_threads(1)
+        except RuntimeError:
+            pass
         import laya
 
         self.kind = "specialist" if "typed-decisions" in model else "general"
