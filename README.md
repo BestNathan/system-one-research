@@ -158,27 +158,45 @@ Laya currently looks best suited to a runtime that can guarantee small, semantic
 
 ## Reproduce
 
-The GitHub Actions workflow is:
+### BANKING77 / action-space research
 
-    .github/workflows/system-one-benchmark.yml
-
-It runs:
-
-1. the 77-way BANKING77 baseline
-2. the controlled small action-space dataset generation
-3. Laya baseline and small-action benchmarks
-4. TypeSafe Jev baseline and small-action benchmarks
-5. report generation
-6. artifact upload
-
-The benchmark job is associated with the GitHub Environment **typesafe** and reads **secrets.TYPESAFE_API_KEY** from that environment.
-
-Artifacts include the frozen/generated cases, raw.jsonl, summary.json, REPORT.md, and SMALL_ACTION_REPORT.md.
+`.github/workflows/system-one-benchmark.yml` runs the 77-way baseline and controlled 3/5/10/20-way experiments, then uploads the raw decisions and generated reports.
 
 Latest successful small-action run:
 
 - [GitHub Actions run #36399437676](https://github.com/BestNathan/system-one-research/actions/runs/36399437676)
 - [Detailed small action-space research report](research/small-action-space-2026-09-28.md)
+
+### Official typed-decisions replication
+
+Typed-decisions uses two CI tiers.
+
+**Push smoke:** `.github/workflows/typed-decisions-smoke.yml`
+
+- triggered by changes to the typed-decisions experiment code
+- samples one case from each of the four workflow families
+- 4 cases / 20 typed decisions per backend
+- runs base Laya, `laya-typed-decisions`, and TypeSafe Jev
+- validates zero errors/dropped questions plus accuracy/Brier/ECE output
+- uses CPU-only PyTorch and a shared Hugging Face checkpoint cache
+- uses concurrency cancellation so only the newest smoke run survives
+
+Latest validated smoke run:
+
+- [GitHub Actions run #36418084288](https://github.com/BestNathan/system-one-research/actions/runs/36418084288)
+
+**Manual full benchmark:** `.github/workflows/typed-decisions-benchmark.yml`
+
+- only `workflow_dispatch`; normal pushes never launch the 400-case benchmark
+- evaluates the pinned official 400-case / 2,000-decision test split
+- runs base Laya, typed Laya, and Jev as three parallel jobs
+- merges their artifacts in a final report job
+- shares the checkpoint cache populated by smoke runs
+- full runs use `cancel-in-progress` so a replacement run cannot stack on top of an older one
+
+The Jev jobs are associated with the GitHub Environment **typesafe** and read **secrets.TYPESAFE_API_KEY** from that environment.
+
+The current GitHub CPU runner is suitable for smoke validation but is not a latency-comparable inference environment: in the successful 4-case smoke, each Laya checkpoint required about 33.7 seconds of batched scoring, while Jev is a hosted API. Full Laya jobs are therefore parallelized and latency results must be interpreted separately from model quality.
 
 ## Next experiment
 
