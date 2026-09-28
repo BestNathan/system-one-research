@@ -1,0 +1,5 @@
+laya==0.3.21
+httpx>=0.27,<1
+datasets>=3,<5
+numpy>=2,<3
+psutil>=6,<8
