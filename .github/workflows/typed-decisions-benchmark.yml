@@ -46,23 +46,20 @@ jobs:
 
       - name: Run base Laya on official typed-decisions test split
         run: |
-          python experiments/typed_decisions/run.py \
-            --backend laya \
+          python experiments/typed_decisions/run_laya_batched.py \
             --model convaiinnovations/laya \
             --output results/typed_decisions/base_laya
 
       - name: Run Laya typed-decisions specialist
         run: |
-          python experiments/typed_decisions/run.py \
-            --backend laya \
+          python experiments/typed_decisions/run_laya_batched.py \
             --model convaiinnovations/laya-typed-decisions \
             --output results/typed_decisions/laya_typed
 
       - name: Run TypeSafe Jev on the same test split
         run: |
           test -n "$TYPESAFE_API_KEY" || { echo "TYPESAFE_API_KEY is not available from the typesafe environment"; exit 2; }
-          python experiments/typed_decisions/run.py \
-            --backend jev \
+          python experiments/typed_decisions/run_jev.py \
             --model jev-1.13.0 \
             --output results/typed_decisions/jev
 
