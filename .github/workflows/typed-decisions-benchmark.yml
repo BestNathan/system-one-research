@@ -1,0 +1,84 @@
+name: typed-decisions paired benchmark
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/typed-decisions-benchmark.yml"
+      - "experiments/typed_decisions/**"
+      - "requirements.txt"
+
+jobs:
+  typed-decisions:
+    environment: typesafe
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      USE_TF: "0"
+      USE_TORCH: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      HF_HOME: "${{ github.workspace }}/.cache/huggingface"
+      HUGGINGFACE_HUB_CACHE: "${{ github.workspace }}/.cache/huggingface/hub"
+      TYPESAFE_API_KEY: "${{ secrets.TYPESAFE_API_KEY }}"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache Hugging Face datasets and both Laya checkpoints
+        uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: typed-decisions-hf-${{ runner.os }}-v1
+          restore-keys: |
+            typed-decisions-hf-${{ runner.os }}-
+
+      - name: Install experiment
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run base Laya on official typed-decisions test split
+        run: |
+          python experiments/typed_decisions/run.py \
+            --backend laya \
+            --model convaiinnovations/laya \
+            --output results/typed_decisions/base_laya
+
+      - name: Run Laya typed-decisions specialist
+        run: |
+          python experiments/typed_decisions/run.py \
+            --backend laya \
+            --model convaiinnovations/laya-typed-decisions \
+            --output results/typed_decisions/laya_typed
+
+      - name: Run TypeSafe Jev on the same test split
+        run: |
+          test -n "$TYPESAFE_API_KEY" || { echo "TYPESAFE_API_KEY is not available from the typesafe environment"; exit 2; }
+          python experiments/typed_decisions/run.py \
+            --backend jev \
+            --model jev-1.13.0 \
+            --output results/typed_decisions/jev
+
+      - name: Generate paired research report
+        run: |
+          python experiments/typed_decisions/report.py \
+            --base-summary results/typed_decisions/base_laya/summary.json \
+            --typed-summary results/typed_decisions/laya_typed/summary.json \
+            --jev-summary results/typed_decisions/jev/summary.json \
+            --base-decisions results/typed_decisions/base_laya/decisions.jsonl \
+            --typed-decisions results/typed_decisions/laya_typed/decisions.jsonl \
+            --jev-decisions results/typed_decisions/jev/decisions.jsonl \
+            --output results/typed_decisions/REPORT.md
+          cat results/typed_decisions/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: typed-decisions-research
+          path: results/typed_decisions
+          if-no-files-found: error
