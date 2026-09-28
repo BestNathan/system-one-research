@@ -1,22 +1,15 @@
-name: system-one benchmark
+name: laya smoke
 
 on:
   workflow_dispatch:
-    inputs:
-      suite:
-        description: Benchmark suite
-        required: true
-        default: smoke
-        type: choice
-        options: [smoke, core, feishu]
-      run_jev:
-        description: Run Jev API comparison (requires TYPESAFE_API_KEY secret)
-        required: true
-        default: false
-        type: boolean
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/system-one-benchmark.yml"
+      - "experiments/system_one/**"
 
 jobs:
-  laya:
+  laya-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -29,33 +22,21 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Install benchmark dependencies
+      - name: Install Laya
         run: |
           python -m pip install --upgrade pip
-          python -m pip install "laya==0.3.21" httpx numpy psutil
-      - name: Run Laya benchmark
-        run: python experiments/system_one/run.py --backend laya --suite "${{ inputs.suite }}" --output results/laya
+          python -m pip install "laya==0.3.21" numpy psutil
+          python -c "import laya; print('laya import ok')"
+      - name: Run Laya smoke flow
+        run: python experiments/system_one/run.py --backend laya --suite smoke --output results/laya
+      - name: Show result
+        if: always()
+        run: |
+          test -f results/laya/summary.json && cat results/laya/summary.json || true
+          test -f results/laya/raw.jsonl && cat results/laya/raw.jsonl || true
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: laya-${{ inputs.suite }}
+          name: laya-smoke
           path: results/laya
-
-  jev:
-    if: ${{ inputs.run_jev }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install benchmark dependencies
-        run: python -m pip install httpx numpy
-      - name: Run Jev benchmark
-        run: python experiments/system_one/run.py --backend jev --suite "${{ inputs.suite }}" --output results/jev
-      - uses: actions/upload-artifact@v4
-        with:
-          name: jev-${{ inputs.suite }}
-          path: results/jev
+          if-no-files-found: warn
