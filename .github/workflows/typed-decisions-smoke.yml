@@ -5,7 +5,10 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/typed-decisions-smoke.yml"
-      - "experiments/typed_decisions/**"
+      - "experiments/typed_decisions/common.py"
+      - "experiments/typed_decisions/run_laya_batched.py"
+      - "experiments/typed_decisions/run_jev.py"
+      - "experiments/typed_decisions/verify_smoke.py"
       - "requirements.txt"
   workflow_dispatch:
 
