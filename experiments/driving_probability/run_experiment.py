@@ -214,7 +214,7 @@ def summarize(experiments: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
         "front_gap_endpoint_js": js_divergence(
             gap[0]["probabilities"], gap[-1]["probabilities"]
         ),
-        "front_gap_signal_to_repeat_noise": mean_gap_js / max(repeat_noise, 1e-12),
+        "front_gap_signal_to_repeat_noise": (\n            None if repeat_noise < 1e-9 else mean_gap_js / repeat_noise\n        ),
         "front_gap_vs_expected_acceleration_spearman": spearman(
             gaps_numeric, gap_expected_accel
         ),
