@@ -2,11 +2,6 @@ name: Jev vs DashScope BANKING77
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/jev-vs-dashscope-banking77.yml"
-      - "experiments/jev_dashscope/**"
 
 concurrency:
   group: jev-vs-dashscope-banking77
