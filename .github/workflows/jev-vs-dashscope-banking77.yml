@@ -1,0 +1,147 @@
+name: Jev vs DashScope BANKING77
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/jev-vs-dashscope-banking77.yml"
+      - "experiments/jev_dashscope/**"
+
+concurrency:
+  group: jev-vs-dashscope-banking77
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dataset dependency
+        run: python -m pip install "datasets>=4.8,<5"
+
+      - name: Prepare compact BANKING77 fixture
+        run: |
+          python experiments/jev_dashscope/prepare_banking77.py \
+            --output results/jev_dashscope/cases.jsonl
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: banking77-77-cases
+          path: results/jev_dashscope/cases.jsonl
+          if-no-files-found: error
+
+  jev:
+    needs: prepare
+    environment: typesafe
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TYPESAFE_API_KEY: "${{ secrets.TYPESAFE_API_KEY }}"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: banking77-77-cases
+          path: results/jev_dashscope
+
+      - name: Install HTTP client
+        run: python -m pip install "httpx>=0.27,<1"
+
+      - name: Run TypeSafe Jev
+        run: |
+          python experiments/jev_dashscope/run_remote.py \
+            --backend jev \
+            --cases results/jev_dashscope/cases.jsonl \
+            --output results/jev_dashscope/jev
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jev-banking77
+          path: results/jev_dashscope/jev
+          if-no-files-found: error
+
+  dashscope:
+    needs: prepare
+    environment: dashscope
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DASHSCOPE_API_KEY: "${{ secrets.DASHSCOPE_API_KEY }}"
+      DASHSCOPE_SYSTEMONE_URL: "https://llm-cnwlvwjfb3z4aa29.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/systemone"
+      DASHSCOPE_MODEL: "decision-model-preview"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: banking77-77-cases
+          path: results/jev_dashscope
+
+      - name: Install HTTP client
+        run: python -m pip install "httpx>=0.27,<1"
+
+      - name: Run DashScope decision model
+        run: |
+          python experiments/jev_dashscope/run_remote.py \
+            --backend dashscope \
+            --cases results/jev_dashscope/cases.jsonl \
+            --output results/jev_dashscope/dashscope
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dashscope-banking77
+          path: results/jev_dashscope/dashscope
+          if-no-files-found: error
+
+  report:
+    needs: [jev, dashscope]
+    if: ${{ always() && needs.jev.result == 'success' && needs.dashscope.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: jev-banking77
+          path: results/jev_dashscope/jev
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dashscope-banking77
+          path: results/jev_dashscope/dashscope
+
+      - name: Generate paired comparison
+        run: |
+          python experiments/jev_dashscope/report.py \
+            --jev-summary results/jev_dashscope/jev/summary.json \
+            --dashscope-summary results/jev_dashscope/dashscope/summary.json \
+            --jev-raw results/jev_dashscope/jev/raw.jsonl \
+            --dashscope-raw results/jev_dashscope/dashscope/raw.jsonl \
+            --output results/jev_dashscope/REPORT.md
+          cat results/jev_dashscope/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jev-vs-dashscope-banking77
+          path: results/jev_dashscope
+          if-no-files-found: error
