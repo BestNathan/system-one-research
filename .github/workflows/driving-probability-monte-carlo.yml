@@ -1,0 +1,126 @@
+name: System One Monte Carlo worldlines
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/driving-probability-monte-carlo.yml"
+      - "experiments/driving_probability/run_monte_carlo.py"
+      - "experiments/driving_probability/compare_monte_carlo.py"
+      - "experiments/driving_probability/test_monte_carlo.py"
+  workflow_dispatch:
+    inputs:
+      worldlines:
+        description: "Worldlines per provider"
+        required: true
+        default: "1000"
+      steps:
+        description: "Steps per worldline"
+        required: true
+        default: "16"
+      workers:
+        description: "Concurrent trajectories per provider"
+        required: true
+        default: "8"
+
+concurrency:
+  group: system-one-monte-carlo-worldlines
+  cancel-in-progress: true
+
+env:
+  WORLDLINES: "${{ github.event_name == 'workflow_dispatch' && inputs.worldlines || '1000' }}"
+  STEPS: "${{ github.event_name == 'workflow_dispatch' && inputs.steps || '16' }}"
+  WORKERS: "${{ github.event_name == 'workflow_dispatch' && inputs.workers || '8' }}"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependency
+        run: python -m pip install "httpx>=0.27,<1"
+      - name: Compile experiment
+        run: |
+          python -m py_compile             experiments/driving_probability/common.py             experiments/driving_probability/run_experiment.py             experiments/driving_probability/run_monte_carlo.py             experiments/driving_probability/compare_monte_carlo.py
+      - name: Run Monte Carlo metric tests
+        working-directory: experiments/driving_probability
+        run: python -m unittest -v test_monte_carlo.py test_metrics.py
+
+  jev:
+    needs: test
+    environment: typesafe
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      TYPESAFE_API_KEY: "${{ secrets.TYPESAFE_API_KEY }}"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install HTTP client
+        run: python -m pip install "httpx>=0.27,<1"
+      - name: Run Jev worldlines
+        run: |
+          python experiments/driving_probability/run_monte_carlo.py             --backend jev             --worldlines "$WORLDLINES"             --steps "$STEPS"             --workers "$WORKERS"             --output results/monte_carlo/jev
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: monte-carlo-jev
+          path: results/monte_carlo/jev
+          if-no-files-found: warn
+
+  dashscope:
+    needs: test
+    environment: dashscope
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      DASHSCOPE_API_KEY: "${{ secrets.DASHSCOPE_API_KEY }}"
+      DASHSCOPE_SYSTEMONE_URL: "https://llm-cnwlvwjfb3z4aa29.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/systemone"
+      DASHSCOPE_MODEL: "decision-model-preview"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install HTTP client
+        run: python -m pip install "httpx>=0.27,<1"
+      - name: Run DashScope worldlines
+        run: |
+          python experiments/driving_probability/run_monte_carlo.py             --backend dashscope             --worldlines "$WORLDLINES"             --steps "$STEPS"             --workers "$WORKERS"             --output results/monte_carlo/dashscope
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: monte-carlo-dashscope
+          path: results/monte_carlo/dashscope
+          if-no-files-found: warn
+
+  report:
+    needs: [jev, dashscope]
+    if: ${{ always() && needs.jev.result == 'success' && needs.dashscope.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: monte-carlo-jev
+          path: results/monte_carlo/jev
+      - uses: actions/download-artifact@v4
+        with:
+          name: monte-carlo-dashscope
+          path: results/monte_carlo/dashscope
+      - name: Compare model-specific worldline distributions
+        run: |
+          python experiments/driving_probability/compare_monte_carlo.py             --jev-summary results/monte_carlo/jev/summary.json             --dashscope-summary results/monte_carlo/dashscope/summary.json             --jev-worldlines results/monte_carlo/jev/worldlines.jsonl             --dashscope-worldlines results/monte_carlo/dashscope/worldlines.jsonl             --output results/monte_carlo/REPORT.md
+          cat results/monte_carlo/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: monte-carlo-worldline-comparison
+          path: results/monte_carlo
+          if-no-files-found: error
