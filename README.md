@@ -157,6 +157,53 @@ The architectural result is also important: **Jev and DashScope can sit behind t
 - [Detailed Jev vs DashScope research report](research/jev-vs-dashscope-banking77-2026-09-29.md)
 - [GitHub Actions run #36565177329](https://github.com/BestNathan/system-one-research/actions/runs/36565177329)
 
+## Experiment 4 — Jev vs DashScope on 100 typed-decision cases
+
+To test whether the BANKING77 result generalizes, a second hosted-provider experiment samples **100 cases** from the official `LocalLLaMA/typed-decisions` test split:
+
+- 25 agent-trace observability cases
+- 25 customer-service cases
+- 25 invoice-processing cases
+- 25 security-incident cases
+- 5 typed questions per case
+- **500 paired decisions**
+- 100 API calls per provider
+
+The result reverses the BANKING77 ordering:
+
+| Metric | TypeSafe Jev | DashScope decision-model-preview |
+|---|---:|---:|
+| Accuracy | **72.0%** | 60.4% |
+| Soft accuracy | **0.536** | 0.483 |
+| TV ↓ | **0.253** | 0.295 |
+| Hard-label Brier ↓ | **0.387** | 0.562 |
+| Soft-distribution Brier ↓ | **0.152** | 0.227 |
+| ECE ↓ | **0.077** | 0.137 |
+| Score MAE ↓ | **0.394** | 0.463 |
+| Within one score level | **93.5%** | 86.5% |
+| Case p50 latency | **181 ms** | 290 ms |
+
+Paired decisions:
+
+- both correct: 241
+- Jev correct / DashScope wrong: **119**
+- DashScope correct / Jev wrong: **61**
+- both wrong: 79
+- exact two-sided discordant-pair test: **p ≈ 1.84e-5**
+- paired bootstrap for the Jev-minus-DashScope accuracy gap: roughly **+6.6 pp to +16.8 pp**
+
+The largest gap is on `score` questions: **71% vs 51%**. The strongest domain effect is invoice processing: **80.8% vs 52.8%**. DashScope is not uniformly weaker, however; for example, on agent-trace `needs_review` it reaches **88% vs Jev 48%**.
+
+Together with Experiment 3, this is evidence against treating provider quality as a single global scalar:
+
+- **BANKING77 77-way choice:** DashScope 84.4%, Jev 76.6%
+- **typed-decisions multi-head:** Jev 72.0%, DashScope 60.4%
+
+Provider selection may therefore need to depend on **domain, question type, action-space structure, calibration, latency, and cost**, not just one aggregate benchmark.
+
+- [Detailed typed100 research report](research/jev-vs-dashscope-typed100-2026-09-29.md)
+- [GitHub Actions run #36568503884](https://github.com/BestNathan/system-one-research/actions/runs/36568503884)
+
 ## Runtime implication
 
 The results suggest that the runtime should avoid exposing a huge global action set directly to System 1.
