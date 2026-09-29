@@ -204,6 +204,51 @@ Provider selection may therefore need to depend on **domain, question type, acti
 - [Detailed typed100 research report](research/jev-vs-dashscope-typed100-2026-09-29.md)
 - [GitHub Actions run #36568503884](https://github.com/BestNathan/system-one-research/actions/runs/36568503884)
 
+## Experiment 5 — dynamic probability distributions in a toy driving loop
+
+The next experiment moves from static benchmark accuracy to **state-conditioned probability dynamics**.
+
+A small one-dimensional driving world repeatedly feeds the current state back into System One and records the full distribution over five longitudinal actions:
+
+- hard brake
+- brake
+- keep speed
+- accelerate
+- hard accelerate
+
+Controlled probes vary front-vehicle distance, driver aggressiveness, and recent history. A 16-step seeded closed loop then inserts a sudden cut-in and later clears the lane while actions are sampled from the returned distributions.
+
+Key result: **both Jev and DashScope materially change the full action distribution as state changes.**
+
+| Probe | Jev | DashScope |
+|---|---:|---:|
+| Identical-state mean pairwise JS | 0.00197 | 0.00000 |
+| Front-gap endpoint JS | 0.25519 | 0.04039 |
+| Gap vs expected acceleration Spearman | 1.000 | 0.829 |
+| Aggressiveness vs expected acceleration Spearman | 0.821 | 1.000 |
+| Near-miss history JS vs neutral | 0.11641 | 0.50500 |
+| Cut-in delta braking probability | +66.0 pp | +5.9 pp |
+| Non-argmax actions sampled in 16 steps | 3 | 5 |
+
+The experiment supports a useful runtime model:
+
+~~~text
+current state + actor profile + recent history
+  -> System One
+  -> P(action | state, profile, history)
+  -> sampler
+  -> action
+  -> environment transition
+  -> new state
+~~~
+
+The model supplies the **conditional distribution**; it is not the randomness source. The experiment uses a fixed-seed PRNG so the trajectory is reproducible.
+
+There is also an important negative result: generic zero-shot System One models are not safe driving controllers. DashScope, for example, reacted only weakly to the synthetic cut-in and continued assigning high acceleration probability at an extremely small gap. The experiment is about probability dynamics, not autonomous-driving safety.
+
+- [Detailed probability-dynamics research report](research/driving-probability-dynamics-2026-09-29.md)
+- [GitHub Actions run #36594467165](https://github.com/BestNathan/system-one-research/actions/runs/36594467165)
+
 ## Runtime implication
 
 The results suggest that the runtime should avoid exposing a huge global action set directly to System 1.
