@@ -123,6 +123,40 @@ The exact same 5 semantic options were presented in original, reversed, and rota
 
 This matters for runtime design: action ordering should normally be an implementation detail, not part of the semantic state.
 
+## Experiment 3 — Jev vs DashScope on compact BANKING77
+
+Alibaba Cloud Model Studio exposes `decision-model-preview` through a TypeSafe System One-compatible endpoint, so Jev and DashScope can be tested with the exact same `state + questions` payload.
+
+To keep paid evaluation small, this experiment uses **77 BANKING77 cases: exactly one example per intent**, while still exposing the complete 77-way action space on every request.
+
+| Metric | TypeSafe Jev | DashScope decision-model-preview |
+|---|---:|---:|
+| Cases | 77/77 | 77/77 |
+| Accuracy | 76.6% | **84.4%** |
+| Brier ↓ | 0.328 | **0.200** |
+| ECE ↓ | 0.106 | **0.055** |
+| Wrong-decision mean confidence | 66.2% | **56.5%** |
+| Mean latency | **170 ms** | 376 ms |
+| p50 latency | **156 ms** | 363 ms |
+| p95 latency | **250 ms** | 419 ms |
+
+Paired correctness:
+
+- both correct: 56
+- Jev correct / DashScope wrong: 3
+- DashScope correct / Jev wrong: 9
+- both wrong: 9
+- exact two-sided discordant-pair test: `p ≈ 0.146`
+
+DashScope is +7.8 percentage points on this slice and also shows materially better Brier/ECE calibration, but the 77-case sample is intentionally small: a paired bootstrap for the accuracy difference spans roughly **-1.3 pp to +16.9 pp**. The result is therefore a positive signal, not a statistically decisive model ranking.
+
+Jev is about **2.2× faster** on the measured hosted path. This includes network and regional routing, so it should not be interpreted as pure model-compute latency.
+
+The architectural result is also important: **Jev and DashScope can sit behind the same System One backend abstraction without changing the decision state/question schema.** Backend selection can therefore be a runtime policy over quality, calibration, latency, cost, locality, language, and domain.
+
+- [Detailed Jev vs DashScope research report](research/jev-vs-dashscope-banking77-2026-09-29.md)
+- [GitHub Actions run #36565177329](https://github.com/BestNathan/system-one-research/actions/runs/36565177329)
+
 ## Runtime implication
 
 The results suggest that the runtime should avoid exposing a huge global action set directly to System 1.
