@@ -74,7 +74,19 @@ class RemoteBackend:
         self.reported_model = self.model
 
     def decide(self, state: dict[str, Any]) -> tuple[dict[str, float], dict[str, Any], float]:
-        payload = {"model": self.model, "state": state, "questions": QUESTION}
+        return self.decide_choice(state, "decision", QUESTION["decision"])
+
+    def decide_choice(
+        self,
+        state: dict[str, Any],
+        question_id: str,
+        question: dict[str, Any],
+    ) -> tuple[dict[str, float], dict[str, Any], float]:
+        payload = {
+            "model": self.model,
+            "state": state,
+            "questions": {question_id: question},
+        }
         last: Exception | None = None
         for attempt in range(5):
             t0 = time.perf_counter()
@@ -90,8 +102,9 @@ class RemoteBackend:
                 response.raise_for_status()
                 body = response.json()
                 self.reported_model = str(body.get("model") or self.reported_model)
-                answer = body["answers"]["decision"]
-                probs = normalize_answer_probabilities(answer)
+                answer = body["answers"][question_id]
+                keys = list(question["criteria"].keys())
+                probs = normalize_choice_probabilities(answer, keys)
                 return probs, body, elapsed_ms
             except Exception as exc:
                 last = exc
@@ -101,14 +114,17 @@ class RemoteBackend:
         raise last or RuntimeError("request failed")
 
 
-def normalize_answer_probabilities(answer: dict[str, Any]) -> dict[str, float]:
+def normalize_choice_probabilities(
+    answer: dict[str, Any],
+    keys: list[str],
+) -> dict[str, float]:
     raw = answer.get("probabilities") or {}
     probs = {}
-    for action in ACTION_ORDER:
+    for key in keys:
         try:
-            probs[action] = float(raw.get(action, 0.0))
+            probs[key] = float(raw.get(key, 0.0))
         except Exception:
-            probs[action] = 0.0
+            probs[key] = 0.0
 
     total = sum(probs.values())
     if total <= 0:
@@ -119,6 +135,10 @@ def normalize_answer_probabilities(answer: dict[str, Any]) -> dict[str, float]:
         total = 1.0
 
     return {k: v / total for k, v in probs.items()}
+
+
+def normalize_answer_probabilities(answer: dict[str, Any]) -> dict[str, float]:
+    return normalize_choice_probabilities(answer, ACTION_ORDER)
 
 
 def expected_acceleration(probs: dict[str, float]) -> float:
