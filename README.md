@@ -249,6 +249,41 @@ There is also an important negative result: generic zero-shot System One models 
 - [Detailed probability-dynamics research report](research/driving-probability-dynamics-2026-09-29.md)
 - [GitHub Actions run #36594467165](https://github.com/BestNathan/system-one-research/actions/runs/36594467165)
 
+## Experiment 6 — 1,000 model-specific Monte Carlo worldlines
+
+The single closed-loop experiment is expanded into **1,000 independent 16-step worldlines per provider**.
+
+Each provider evolves its own state trajectory. Jev never consumes DashScope state and DashScope never consumes Jev state. Worldline IDs share only the same deterministic PRNG seed so paired comparisons use matched random draws.
+
+| Metric | Jev | DashScope |
+|---|---:|---:|
+| Worldlines completed | 1,000 | 1,000 |
+| System One calls | 16,000 | 16,000 |
+| Near-miss rate in toy world | 70.8% | 88.6% |
+| Critical-gap rate (<3m) | 50.1% | 84.0% |
+| 1m simulator-floor rate | 38.6% | 81.5% |
+| Mean minimum gap | 4.814m | 2.910m |
+| Mean final speed | 46.845 mph | 20.576 mph |
+| Hard brakes / worldline | 1.716 | 3.306 |
+| Hard accelerations / worldline | 5.016 | 3.067 |
+| Input tokens | 11.22M | 5.30M |
+| Mean hosted latency | 89.7 ms | 483.1 ms |
+
+The most important result is not the toy-world outcome rate itself. It is the **compounding effect of probability fields**.
+
+At the cut-in, Jev switches early toward braking while DashScope remains strongly weighted toward acceleration. Several steps later DashScope becomes highly brake-biased, and the recent-history state keeps that bias alive after the lane clears. Small local probability differences therefore become large differences in the distribution of whole trajectories.
+
+This exposes another runtime-level design issue:
+
+> **State semantics, memory decay, and event expiry are part of the effective System One policy.**
+
+A latched recent-event flag can create behavioral hysteresis even though the model itself is stateless between requests.
+
+The Monte Carlo sampler is also behaving as intended. Across 16,000 calls per provider, sampled action frequencies are within about 0.57 pp of Jev's average reported probabilities and 0.28 pp of DashScope's. This validates the stochastic simulation layer, but it is not external behavioral calibration.
+
+- [Detailed Monte Carlo worldline report](research/driving-probability-monte-carlo-2026-09-29.md)
+- [GitHub Actions run #36597655294](https://github.com/BestNathan/system-one-research/actions/runs/36597655294)
+
 ## Runtime implication
 
 The results suggest that the runtime should avoid exposing a huge global action set directly to System 1.
