@@ -1,12 +1,6 @@
 name: dynamic System One probability experiment
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/driving-probability-dynamics.yml"
-      - "experiments/driving_probability/**"
   workflow_dispatch:
 
 concurrency:
