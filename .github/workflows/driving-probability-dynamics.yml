@@ -3,7 +3,7 @@ name: dynamic System One probability experiment
 on:
   push:
     branches:
-      - research/driving-probability-dynamics
+      - main
     paths:
       - ".github/workflows/driving-probability-dynamics.yml"
       - "experiments/driving_probability/**"
