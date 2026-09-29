@@ -1,0 +1,153 @@
+name: learned-event probabilistic worlds
+
+on:
+  push:
+    branches:
+      - main
+      - research/probabilistic-world-events
+    paths:
+      - ".github/workflows/probabilistic-world-events.yml"
+      - "experiments/driving_probability/common.py"
+      - "experiments/driving_probability/run_probabilistic_world.py"
+      - "experiments/driving_probability/compare_probabilistic_world.py"
+      - "experiments/driving_probability/test_probabilistic_world.py"
+  workflow_dispatch:
+    inputs:
+      worldlines:
+        description: "Worldlines per provider"
+        required: true
+        default: "1000"
+      steps:
+        description: "Steps per worldline"
+        required: true
+        default: "16"
+      workers:
+        description: "Concurrent worldlines per provider"
+        required: true
+        default: "8"
+
+concurrency:
+  group: learned-event-probabilistic-worlds
+  cancel-in-progress: true
+
+env:
+  WORLDLINES: "${{ github.event_name == 'workflow_dispatch' && inputs.worldlines || '1000' }}"
+  STEPS: "${{ github.event_name == 'workflow_dispatch' && inputs.steps || '16' }}"
+  WORKERS: "${{ github.event_name == 'workflow_dispatch' && inputs.workers || '8' }}"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependency
+        run: python -m pip install "httpx>=0.27,<1"
+      - name: Compile experiment
+        run: |
+          python -m py_compile \
+            experiments/driving_probability/common.py \
+            experiments/driving_probability/run_probabilistic_world.py \
+            experiments/driving_probability/compare_probabilistic_world.py
+      - name: Run tests
+        working-directory: experiments/driving_probability
+        run: |
+          python -m unittest -v \
+            test_metrics.py \
+            test_monte_carlo.py \
+            test_probabilistic_world.py
+
+  jev:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    needs: test
+    environment: typesafe
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      TYPESAFE_API_KEY: "${{ secrets.TYPESAFE_API_KEY }}"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install HTTP client
+        run: python -m pip install "httpx>=0.27,<1"
+      - name: Run Jev probability worlds
+        run: |
+          python experiments/driving_probability/run_probabilistic_world.py \
+            --backend jev \
+            --worldlines "$WORLDLINES" \
+            --steps "$STEPS" \
+            --workers "$WORKERS" \
+            --output results/probabilistic_world/jev
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: probabilistic-world-jev
+          path: results/probabilistic_world/jev
+          if-no-files-found: warn
+
+  dashscope:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    needs: test
+    environment: dashscope
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      DASHSCOPE_API_KEY: "${{ secrets.DASHSCOPE_API_KEY }}"
+      DASHSCOPE_SYSTEMONE_URL: "https://llm-cnwlvwjfb3z4aa29.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/systemone"
+      DASHSCOPE_MODEL: "decision-model-preview"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install HTTP client
+        run: python -m pip install "httpx>=0.27,<1"
+      - name: Run DashScope probability worlds
+        run: |
+          python experiments/driving_probability/run_probabilistic_world.py \
+            --backend dashscope \
+            --worldlines "$WORLDLINES" \
+            --steps "$STEPS" \
+            --workers "$WORKERS" \
+            --output results/probabilistic_world/dashscope
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: probabilistic-world-dashscope
+          path: results/probabilistic_world/dashscope
+          if-no-files-found: warn
+
+  report:
+    needs: [jev, dashscope]
+    if: ${{ always() && needs.jev.result == 'success' && needs.dashscope.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: probabilistic-world-jev
+          path: results/probabilistic_world/jev
+      - uses: actions/download-artifact@v4
+        with:
+          name: probabilistic-world-dashscope
+          path: results/probabilistic_world/dashscope
+      - name: Compare learned probability worlds
+        run: |
+          python experiments/driving_probability/compare_probabilistic_world.py \
+            --jev-summary results/probabilistic_world/jev/summary.json \
+            --dashscope-summary results/probabilistic_world/dashscope/summary.json \
+            --jev-worldlines results/probabilistic_world/jev/worldlines.jsonl \
+            --dashscope-worldlines results/probabilistic_world/dashscope/worldlines.jsonl \
+            --output results/probabilistic_world/REPORT.md
+          cat results/probabilistic_world/REPORT.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: probabilistic-world-comparison
+          path: results/probabilistic_world
+          if-no-files-found: error
