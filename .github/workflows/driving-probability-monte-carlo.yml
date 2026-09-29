@@ -1,13 +1,6 @@
 name: System One Monte Carlo worldlines
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/driving-probability-monte-carlo.yml"
-      - "experiments/driving_probability/run_monte_carlo.py"
-      - "experiments/driving_probability/compare_monte_carlo.py"
-      - "experiments/driving_probability/test_monte_carlo.py"
   workflow_dispatch:
     inputs:
       worldlines:
