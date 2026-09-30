@@ -1,15 +1,6 @@
 name: probability world iteration
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/two-minute-probability-world.yml"
-      - "experiments/driving_probability/run_safe_cruise_world.py"
-      - "experiments/driving_probability/test_safe_cruise_world.py"
-      - "scripts/build_two_minute_pages_data.py"
-      - "scripts/register_probability_world_record.py"
-      - "site/experiments/probability-world/**"
   pull_request:
     paths:
       - ".github/workflows/two-minute-probability-world.yml"
@@ -56,11 +47,11 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  DURATION_SECONDS: "${{ inputs.duration_seconds || '120' }}"
-  PHYSICS_FPS: "${{ inputs.physics_fps || '12' }}"
-  SEED: "${{ inputs.seed || '20260930' }}"
-  TARGET_SPEED_MPH: "${{ inputs.target_speed_mph || '80' }}"
-  MIN_GAP_M: "${{ inputs.min_gap_m || '30' }}"
+  DURATION_SECONDS: "${{ inputs.duration_seconds }}"
+  PHYSICS_FPS: "${{ inputs.physics_fps }}"
+  SEED: "${{ inputs.seed }}"
+  TARGET_SPEED_MPH: "${{ inputs.target_speed_mph }}"
+  MIN_GAP_M: "${{ inputs.min_gap_m }}"
 
 jobs:
   test:
@@ -92,7 +83,7 @@ jobs:
             test_safe_cruise_world.py
 
   jev:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     needs: test
     environment: typesafe
     runs-on: ubuntu-latest
@@ -125,7 +116,7 @@ jobs:
           if-no-files-found: warn
 
   dashscope:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     needs: test
     environment: dashscope
     runs-on: ubuntu-latest
@@ -160,7 +151,7 @@ jobs:
           if-no-files-found: warn
 
   save-record:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     needs: [jev, dashscope]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -186,8 +177,8 @@ jobs:
 
       - name: Build persistent replay record
         env:
-          RECORD_LABEL: "${{ github.event_name == 'workflow_dispatch' && inputs.label || 'v3c safe-cruise following baseline' }}"
-          RECORD_NOTE: "${{ github.event_name == 'workflow_dispatch' && inputs.note || 'Starts with a slower lead vehicle at 60m / 72mph so both providers must demonstrate following-distance regulation from the first frame. The 30m hard minimum-gap invariant, 50m comfortable gap target, 80±2mph speed envelope, and 12Hz barrier shield remain active.' }}"
+          RECORD_LABEL: "${{ inputs.label }}"
+          RECORD_NOTE: "${{ inputs.note }}"
         run: |
           RECORD_ID="$GITHUB_RUN_ID"
           RECORD_DIR="site/experiments/probability-world/runs/$RECORD_ID"
