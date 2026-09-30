@@ -1,0 +1,176 @@
+name: two-minute probability worlds
+
+on:
+  push:
+    branches:
+      - main
+      - research/two-minute-probability-world
+    paths:
+      - ".github/workflows/two-minute-probability-world.yml"
+      - "experiments/driving_probability/run_two_minute_world.py"
+      - "experiments/driving_probability/test_two_minute_world.py"
+      - "scripts/build_two_minute_pages_data.py"
+      - "site/**"
+  workflow_dispatch:
+    inputs:
+      worldlines:
+        description: "Worldlines per provider"
+        required: true
+        default: "100"
+      duration_seconds:
+        description: "Simulation duration in seconds"
+        required: true
+        default: "120"
+      physics_fps:
+        description: "Physics/render frames per second"
+        required: true
+        default: "12"
+      workers:
+        description: "Concurrent worldlines per provider"
+        required: true
+        default: "8"
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: two-minute-probability-worlds
+  cancel-in-progress: true
+
+env:
+  WORLDLINES: "${{ github.event_name == 'workflow_dispatch' && inputs.worldlines || '100' }}"
+  DURATION_SECONDS: "${{ github.event_name == 'workflow_dispatch' && inputs.duration_seconds || '120' }}"
+  PHYSICS_FPS: "${{ github.event_name == 'workflow_dispatch' && inputs.physics_fps || '12' }}"
+  WORKERS: "${{ github.event_name == 'workflow_dispatch' && inputs.workers || '8' }}"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependency
+        run: python -m pip install "httpx>=0.27,<1"
+      - name: Compile experiment and check browser JS
+        run: |
+          python -m py_compile \
+            experiments/driving_probability/run_two_minute_world.py \
+            scripts/build_two_minute_pages_data.py
+          node --check site/app.js
+      - name: Run tests
+        working-directory: experiments/driving_probability
+        run: |
+          python -m unittest -v \
+            test_metrics.py \
+            test_monte_carlo.py \
+            test_probabilistic_world.py \
+            test_two_minute_world.py
+
+  jev:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    needs: test
+    environment: typesafe
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      TYPESAFE_API_KEY: "${{ secrets.TYPESAFE_API_KEY }}"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install "httpx>=0.27,<1"
+      - name: Run Jev two-minute worlds
+        run: |
+          python experiments/driving_probability/run_two_minute_world.py \
+            --backend jev \
+            --worldlines "$WORLDLINES" \
+            --duration-seconds "$DURATION_SECONDS" \
+            --physics-fps "$PHYSICS_FPS" \
+            --workers "$WORKERS" \
+            --output results/two_minute/jev
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: two-minute-world-jev
+          path: results/two_minute/jev
+          if-no-files-found: warn
+
+  dashscope:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    needs: test
+    environment: dashscope
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      DASHSCOPE_API_KEY: "${{ secrets.DASHSCOPE_API_KEY }}"
+      DASHSCOPE_SYSTEMONE_URL: "https://llm-cnwlvwjfb3z4aa29.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/systemone"
+      DASHSCOPE_MODEL: "decision-model-preview"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install "httpx>=0.27,<1"
+      - name: Run DashScope two-minute worlds
+        run: |
+          python experiments/driving_probability/run_two_minute_world.py \
+            --backend dashscope \
+            --worldlines "$WORLDLINES" \
+            --duration-seconds "$DURATION_SECONDS" \
+            --physics-fps "$PHYSICS_FPS" \
+            --workers "$WORKERS" \
+            --output results/two_minute/dashscope
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: two-minute-world-dashscope
+          path: results/two_minute/dashscope
+          if-no-files-found: warn
+
+  deploy:
+    needs: [jev, dashscope]
+    if: ${{ always() && needs.jev.result == 'success' && needs.dashscope.result == 'success' }}
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: two-minute-world-jev
+          path: _artifacts/jev
+      - uses: actions/download-artifact@v4
+        with:
+          name: two-minute-world-dashscope
+          path: _artifacts/dashscope
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build two-minute replay data
+        run: |
+          python scripts/build_two_minute_pages_data.py \
+            --jev-summary _artifacts/jev/summary.json \
+            --dashscope-summary _artifacts/dashscope/summary.json \
+            --jev-worldlines _artifacts/jev/worldlines.jsonl \
+            --dashscope-worldlines _artifacts/dashscope/worldlines.jsonl \
+            --run-id "$GITHUB_RUN_ID" \
+            --output site/data/probability-world.json \
+            --max-worldlines 24
+          test -s site/data/probability-world.json
+          du -h site/data/probability-world.json
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - name: Deploy two-minute demo
+        id: deployment
+        uses: actions/deploy-pages@v4

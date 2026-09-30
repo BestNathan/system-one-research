@@ -14,7 +14,7 @@
       <div>
         <div class="eyebrow">SYSTEM-ONE-RESEARCH / PROBABILITY WORLD</div>
         <h1>Probability World</h1>
-        <p class="hero-copy">Two model-specific worlds. Each second, System One samples an external event, then samples a driver action, advances physics, and feeds the resulting state back into the next decision.</p>
+        <p class="hero-copy">Two model-specific worlds running for two minutes. System One makes one event + actor decision each second while physics advances at 12 frames per second.</p>
       </div>
       <a id="run-link" class="button secondary" target="_blank" rel="noreferrer">GitHub Actions run ↗</a>
     </header>
@@ -34,15 +34,15 @@
           <button id="next-step" class="icon-button" aria-label="Next step">→</button>
           <label class="speed-select">Speed
             <select id="speed-select">
-              <option value="1400">0.5×</option>
-              <option value="800" selected>1×</option>
-              <option value="420">2×</option>
-              <option value="220">4×</option>
+              <option value="167">0.5×</option>
+              <option value="83" selected>1×</option>
+              <option value="42">2×</option>
+              <option value="21">4×</option>
             </select>
           </label>
         </div>
         <div class="step-control">
-          <div class="step-label">Step <strong id="step-number">0</strong> / <span id="step-max">15</span></div>
+          <div class="step-label">Time <strong id="step-number">00:00.0</strong> · frame / <span id="step-max">1439</span></div>
           <input id="step-range" type="range" min="0" max="15" value="0" step="1" />
         </div>
       </section>
@@ -152,7 +152,7 @@
         <article class="panel prose-card">
           <div class="eyebrow">WHAT YOU ARE WATCHING</div>
           <h3>A stochastic closed loop, not a scripted animation</h3>
-          <p>The road event is sampled from <code>P(event | state)</code>. After the event mutates the world, the driver action is sampled from <code>P(action | updated state)</code>. Physics advances one second and the resulting state becomes the next input.</p>
+          <p>The road event is sampled from <code>P(event | state)</code>. After the event mutates the world, the driver action is sampled from <code>P(action | updated state)</code>. The chosen action is held for one decision second while physics integrates at 12 Hz; the resulting state becomes the next System One input.</p>
         </article>
         <article class="panel prose-card">
           <div class="eyebrow">IMPORTANT LIMITATION</div>
