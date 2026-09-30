@@ -1,4 +1,4 @@
-name: two-minute probability worlds
+name: probability world iteration
 
 on:
   workflow_dispatch:
