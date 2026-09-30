@@ -1,0 +1,22 @@
+[
+  {
+    "slug": "probability-world",
+    "title": "Probability World",
+    "status": "live",
+    "date": "2026-09-30",
+    "summary": "A two-minute stochastic driving world where System One separately generates external-event and driver-action probability distributions, then sampled decisions feed back through 12 Hz physics.",
+    "tags": [
+      "System 1",
+      "Probability Field",
+      "Monte Carlo",
+      "Closed Loop"
+    ],
+    "facts": [
+      "2 minute replay",
+      "12 physics FPS",
+      "1 Hz decisions",
+      "Jev vs DashScope"
+    ],
+    "route": "probability-world/"
+  }
+]
