@@ -33,6 +33,39 @@
         }
       },
       "path": "runs/36697168218/record.json"
+    },
+    {
+      "id": "36682237914",
+      "created_at": "2026-09-30T07:10:54Z",
+      "label": "v1 two-minute baseline",
+      "note": "Legacy 100-world batch. This saved replay uses matched worldline #0, the trajectory used to diagnose DashScope's brake attractor before the v2 state-policy fix.",
+      "source_commit": "3e8f605beec3a654285faff95e08b931fe7f89e5",
+      "workflow_run_id": 36682237914,
+      "workflow_run_url": "https://github.com/BestNathan/system-one-research/actions/runs/36682237914",
+      "seed": "20260930",
+      "duration_seconds": 120,
+      "physics_fps": 12,
+      "decision_hz": 1,
+      "runtime_variant": "v1-legacy",
+      "models": {
+        "jev": "jev-1.13.0",
+        "dashscope": "decision-model-preview"
+      },
+      "outcomes": {
+        "jev": {
+          "events": 33.5,
+          "near_miss": true,
+          "critical_gap": true,
+          "final_speed_mph": 37.07595204008546
+        },
+        "dashscope": {
+          "events": 8.24,
+          "near_miss": true,
+          "critical_gap": true,
+          "final_speed_mph": 0.4250178954903365
+        }
+      },
+      "path": "runs/36682237914/record.json"
     }
   ]
 }
