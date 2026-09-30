@@ -427,7 +427,7 @@ def aggregate(
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--backend", choices=["jev", "dashscope"], required=True)
-    ap.add_argument("--worldlines", type=int, default=100)
+    ap.add_argument("--worldlines", type=int, default=1)
     ap.add_argument("--duration-seconds", type=int, default=120)
     ap.add_argument("--physics-fps", type=int, default=12)
     ap.add_argument("--workers", type=int, default=8)

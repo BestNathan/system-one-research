@@ -24,3 +24,20 @@ Current experiment:
 
 This keeps visualizations isolated from one another and lets multiple experiments coexist
 on the same GitHub Pages site.
+
+
+## Persistent probability-world records
+
+The probability-world experiment is intentionally iterative rather than a large batch.
+
+Each manual workflow run generates exactly one paired Jev/DashScope world, writes a compact replay to:
+
+`site/experiments/probability-world/runs/<workflow-run-id>/record.json`
+
+and prepends metadata to:
+
+`site/experiments/probability-world/runs/manifest.json`
+
+The experiment page loads that manifest and lets the viewer switch between saved iterations with `?run=<workflow-run-id>`.
+
+Keep the random seed fixed when comparing runtime/model changes so the sampled uniform streams stay matched across iterations. Change the seed only when intentionally exploring a different stochastic realization.

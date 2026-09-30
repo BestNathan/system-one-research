@@ -65,7 +65,13 @@ def main():
     ap.add_argument("--dashscope-worldlines", type=Path, required=True)
     ap.add_argument("--run-id", type=int, required=True)
     ap.add_argument("--output", type=Path, required=True)
-    ap.add_argument("--max-worldlines", type=int, default=24)
+    ap.add_argument("--max-worldlines", type=int, default=1)
+    ap.add_argument("--record-id")
+    ap.add_argument("--created-at")
+    ap.add_argument("--commit-sha")
+    ap.add_argument("--label", default="")
+    ap.add_argument("--note", default="")
+    ap.add_argument("--seed", default="")
     args = ap.parse_args()
 
     js = json.loads(args.jev_summary.read_text(encoding="utf-8"))
@@ -160,6 +166,12 @@ def main():
             "frames_per_worldline": js["frames_per_worldline"],
             "decisions_per_worldline": js["decisions_per_worldline"],
             "decision_hz": js["decision_hz"],
+            "record_id": args.record_id or str(args.run_id),
+            "created_at": args.created_at,
+            "commit_sha": args.commit_sha,
+            "label": args.label,
+            "note": args.note,
+            "seed": args.seed,
         },
         "summary": {"jev": js, "dashscope": ds},
         "pairs": [

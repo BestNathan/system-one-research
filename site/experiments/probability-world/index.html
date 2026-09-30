@@ -25,9 +25,9 @@
     <main id="app" hidden>
       <section class="control-panel panel">
         <div class="control-group world-control">
-          <label for="world-select">Worldline</label>
-          <select id="world-select"></select>
-          <button id="random-world" class="icon-button">Shuffle</button>
+          <label for="run-select">Saved run</label>
+          <select id="run-select"></select>
+          <button id="latest-run" class="icon-button">Latest</button>
         </div>
         <div class="playback-group">
           <button id="prev-step" class="icon-button" aria-label="Previous step">←</button>
@@ -51,7 +51,7 @@
       <section class="overview-grid" id="overview-grid"></section>
 
       <section class="world-tags panel">
-        <div><span class="muted">Representative pair:</span> <strong id="world-id-label">#0</strong></div>
+        <div><span class="muted">Saved record:</span> <strong id="run-id-label">–</strong></div>
         <div id="world-tags" class="tags"></div>
         <div class="muted small" id="embed-note"></div>
       </section>
@@ -127,14 +127,14 @@
       <section class="charts-grid">
         <article class="panel chart-card">
           <div class="panel-title-row">
-            <div><div class="eyebrow">SELECTED WORLDLINE</div><h3>Speed trajectory</h3></div>
+            <div><div class="eyebrow">SAVED RUN</div><h3>Speed trajectory</h3></div>
             <div class="legend"><span class="dot jev-dot"></span>Jev <span class="dot dash-dot"></span>DashScope</div>
           </div>
           <svg id="speed-chart" class="line-chart" viewBox="0 0 760 240"></svg>
         </article>
         <article class="panel chart-card">
           <div class="panel-title-row">
-            <div><div class="eyebrow">SELECTED WORLDLINE</div><h3>Front gap trajectory</h3></div>
+            <div><div class="eyebrow">SAVED RUN</div><h3>Front gap trajectory</h3></div>
             <div class="legend"><span class="risk-line"></span>7m near-miss threshold</div>
           </div>
           <svg id="gap-chart" class="line-chart" viewBox="0 0 760 240"></svg>
@@ -164,7 +164,7 @@
     </main>
 
     <footer>
-      <span>Generated from system-one-research Monte Carlo artifacts.</span>
+      <span>Each probability-world iteration is saved as a persistent replay record.</span>
       <a href="https://github.com/BestNathan/system-one-research" target="_blank" rel="noreferrer">Repository ↗</a>
     </footer>
   </div>

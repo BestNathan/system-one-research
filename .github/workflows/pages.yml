@@ -8,16 +8,6 @@ on:
       - "scripts/build_two_minute_pages_data.py"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
-    inputs:
-      probability_world_run_id:
-        description: "Workflow run containing two-minute probability-world artifacts"
-        required: true
-        default: "36682237914"
-  workflow_run:
-    workflows:
-      - "two-minute probability worlds"
-    types:
-      - completed
 
 permissions:
   contents: read
@@ -30,11 +20,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PROBABILITY_WORLD_RUN_ID: "${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || github.event_name == 'workflow_dispatch' && inputs.probability_world_run_id || '36682237914' }}"
+  LEGACY_PROBABILITY_WORLD_RUN_ID: "36682237914"
 
 jobs:
   deploy:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -42,38 +31,57 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Jev probability-world artifacts
+      - name: Check for persistent probability-world records
+        id: history
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path("site/experiments/probability-world/runs/manifest.json")
+          records = []
+          if path.exists():
+              records = json.loads(path.read_text()).get("records", [])
+          with open("$GITHUB_OUTPUT", "a") as f:
+              f.write(f"has_records={'true' if records else 'false'}\n")
+          print(f"persistent probability-world records: {len(records)}")
+          PY
+
+      - name: Download legacy Jev replay for bootstrap
+        if: steps.history.outputs.has_records != 'true'
         uses: actions/download-artifact@v4
         with:
           name: two-minute-world-jev
           path: _artifacts/probability-world/jev
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ env.PROBABILITY_WORLD_RUN_ID }}
+          run-id: ${{ env.LEGACY_PROBABILITY_WORLD_RUN_ID }}
 
-      - name: Download DashScope probability-world artifacts
+      - name: Download legacy DashScope replay for bootstrap
+        if: steps.history.outputs.has_records != 'true'
         uses: actions/download-artifact@v4
         with:
           name: two-minute-world-dashscope
           path: _artifacts/probability-world/dashscope
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ env.PROBABILITY_WORLD_RUN_ID }}
+          run-id: ${{ env.LEGACY_PROBABILITY_WORLD_RUN_ID }}
 
       - uses: actions/setup-python@v5
+        if: steps.history.outputs.has_records != 'true'
         with:
           python-version: "3.12"
 
-      - name: Build probability-world route data
+      - name: Build legacy bootstrap replay
+        if: steps.history.outputs.has_records != 'true'
         run: |
           python scripts/build_two_minute_pages_data.py \
             --jev-summary _artifacts/probability-world/jev/summary.json \
             --dashscope-summary _artifacts/probability-world/dashscope/summary.json \
             --jev-worldlines _artifacts/probability-world/jev/worldlines.jsonl \
             --dashscope-worldlines _artifacts/probability-world/dashscope/worldlines.jsonl \
-            --run-id "$PROBABILITY_WORLD_RUN_ID" \
+            --run-id "$LEGACY_PROBABILITY_WORLD_RUN_ID" \
+            --label "Legacy batch replay" \
+            --note "Bootstrap replay from the earlier 100-worldline experiment." \
             --output site/experiments/probability-world/data/probability-world.json \
-            --max-worldlines 24
-          test -s site/experiments/probability-world/data/probability-world.json
-          du -h site/experiments/probability-world/data/probability-world.json
+            --max-worldlines 1
 
       - name: Check static routes
         run: |
@@ -81,6 +89,7 @@ jobs:
           test -s site/experiments/index.html
           test -s site/experiments/manifest.json
           test -s site/experiments/probability-world/index.html
+          test -s site/experiments/probability-world/runs/manifest.json
           node --check site/catalog.js
           node --check site/experiments/probability-world/app.js
 
