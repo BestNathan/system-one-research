@@ -2,6 +2,52 @@
   "schema_version": 1,
   "records": [
     {
+      "id": "36715932956",
+      "created_at": "2026-09-30T12:40:31Z",
+      "label": "v3c safe-cruise following baseline",
+      "note": "Starts with a slower lead vehicle at 60m / 72mph so both providers must demonstrate following-distance regulation from the first frame. The 30m hard minimum-gap invariant, 50m comfortable gap target, 80±2mph speed envelope, and 12Hz barrier shield remain active.",
+      "source_commit": "310a45d44822823ff17607e2aeacb59c010714ad",
+      "workflow_run_id": 36715932956,
+      "workflow_run_url": "https://github.com/BestNathan/system-one-research/actions/runs/36715932956",
+      "seed": "20260930",
+      "duration_seconds": 120,
+      "physics_fps": 12,
+      "decision_hz": 1,
+      "runtime_variant": "v3c-safe-cruise-following",
+      "control": {
+        "target_speed_mph": 80.0,
+        "min_gap_m": 30.0,
+        "target_gap_m": 50.0,
+        "speed_deadband_mph": 2.0,
+        "invariant_violation_frames": 0,
+        "shield_override_frames": 0,
+        "shield_override_decisions": 0,
+        "free_cruise_band_rate": null,
+        "free_speed_mae_mph": null,
+        "following_gap_mae_m": 7.0944484213095045,
+        "min_gap_margin_m": 1.9461799999951381
+      },
+      "models": {
+        "jev": "jev-1.13.0",
+        "dashscope": "decision-model-preview"
+      },
+      "outcomes": {
+        "jev": {
+          "events": 2,
+          "near_miss": false,
+          "critical_gap": false,
+          "final_speed_mph": 78.65783822477259
+        },
+        "dashscope": {
+          "events": 1,
+          "near_miss": false,
+          "critical_gap": false,
+          "final_speed_mph": 79.3289191123841
+        }
+      },
+      "path": "runs/36715932956/record.json"
+    },
+    {
       "id": "36715222071",
       "created_at": "2026-09-30T12:32:50Z",
       "label": "v3b safe-cruise speed envelope",
