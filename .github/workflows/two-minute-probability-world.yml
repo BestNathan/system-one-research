@@ -1,15 +1,6 @@
 name: probability world iteration
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/two-minute-probability-world.yml"
-      - "experiments/driving_probability/run_two_minute_world.py"
-      - "experiments/driving_probability/test_two_minute_world.py"
-      - "scripts/build_two_minute_pages_data.py"
-      - "scripts/register_probability_world_record.py"
-      - "site/experiments/probability-world/app.js"
   pull_request:
     paths:
       - ".github/workflows/two-minute-probability-world.yml"
@@ -48,9 +39,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  DURATION_SECONDS: "${{ inputs.duration_seconds || '120' }}"
-  PHYSICS_FPS: "${{ inputs.physics_fps || '12' }}"
-  SEED: "${{ inputs.seed || '20260930' }}"
+  DURATION_SECONDS: "${{ inputs.duration_seconds }}"
+  PHYSICS_FPS: "${{ inputs.physics_fps }}"
+  SEED: "${{ inputs.seed }}"
 
 jobs:
   test:
@@ -80,7 +71,7 @@ jobs:
             test_two_minute_world.py
 
   jev:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     needs: test
     environment: typesafe
     runs-on: ubuntu-latest
@@ -111,7 +102,7 @@ jobs:
           if-no-files-found: warn
 
   dashscope:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     needs: test
     environment: dashscope
     runs-on: ubuntu-latest
@@ -144,7 +135,7 @@ jobs:
           if-no-files-found: warn
 
   save-record:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     needs: [jev, dashscope]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -170,8 +161,8 @@ jobs:
 
       - name: Build persistent replay record
         env:
-          RECORD_LABEL: "${{ github.event_name == 'workflow_dispatch' && inputs.label || 'v2 state-policy fix' }}"
-          RECORD_NOTE: "${{ github.event_name == 'workflow_dispatch' && inputs.note || 'Mask braking at zero speed; replace categorical last_action with 2-step acceleration history; prune front vehicle beyond 120m.' }}"
+          RECORD_LABEL: "${{ inputs.label }}"
+          RECORD_NOTE: "${{ inputs.note }}"
         run: |
           RECORD_ID="$GITHUB_RUN_ID"
           RECORD_DIR="site/experiments/probability-world/runs/$RECORD_ID"
