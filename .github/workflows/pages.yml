@@ -1,12 +1,6 @@
 name: deploy probability world pages
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "site/**"
-      - "scripts/build_probabilistic_world_pages_data.py"
-      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
