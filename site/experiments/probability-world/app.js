@@ -19,6 +19,8 @@ const MODEL = {
 };
 
 let data;
+let records = [];
+let currentRecord = null;
 let pairIndex = 0;
 let step = 0;
 let timer = null;
@@ -26,43 +28,76 @@ let playing = false;
 
 async function init() {
   try {
-    const res = await fetch("./data/probability-world.json");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    data = await res.json();
-
-    $("run-link").href = data.meta.run_url;
-    $("step-max").textContent = data.meta.frames_per_worldline - 1;
-    $("step-range").max = data.meta.frames_per_worldline - 1;
-
-    populateWorldSelect();
-    renderOverview();
     bindControls();
 
-    const requested = new URLSearchParams(location.search).get("world");
-    if (requested !== null) {
-      const idx = data.pairs.findIndex(p => String(p.id) === String(requested));
-      if (idx >= 0) pairIndex = idx;
-    }
+    let manifest = { records: [] };
+    const manifestRes = await fetch("./runs/manifest.json", { cache: "no-store" });
+    if (manifestRes.ok) manifest = await manifestRes.json();
+    records = manifest.records || [];
 
-    $("world-select").value = String(data.pairs[pairIndex].id);
-    $("embed-note").textContent =
-      `${data.meta.worldlines_embedded} representative pairs embedded · ${data.meta.physics_fps} physics fps · ${data.meta.duration_seconds}s · aggregate cards use all ${data.meta.worldlines_total_per_model.toLocaleString()} per model`;
+    if (records.length) {
+      populateRunSelect();
+      const requested = new URLSearchParams(location.search).get("run");
+      const selected = records.find(r => String(r.id) === String(requested)) || records[0];
+      await loadRecord(selected.id, false);
+    } else {
+      const res = await fetch("./data/probability-world.json");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      data = await res.json();
+      currentRecord = {
+        id: `legacy-${data.meta.run_id}`,
+        label: "Legacy batch replay",
+        note: "Bootstrap replay from the earlier batch experiment; new iterations are saved one run at a time.",
+        created_at: null,
+        source_commit: null,
+        path: null,
+      };
+      const opt = document.createElement("option");
+      opt.value = currentRecord.id;
+      opt.textContent = currentRecord.label;
+      $("run-select").append(opt);
+      initializeDataView();
+    }
 
     $("loading").hidden = true;
     $("app").hidden = false;
-    renderAll();
   } catch (err) {
     $("loading").textContent = `Could not load demo data: ${err.message}`;
   }
 }
 
-function populateWorldSelect() {
-  for (const p of data.pairs) {
+function populateRunSelect() {
+  $("run-select").innerHTML = "";
+  for (const record of records) {
     const opt = document.createElement("option");
-    opt.value = p.id;
-    opt.textContent = `#${p.id} — ${p.tags.slice(0, 2).join(" · ")}`;
-    $("world-select").append(opt);
+    opt.value = record.id;
+    const date = record.created_at ? record.created_at.slice(0, 16).replace("T", " ") : "";
+    opt.textContent = `${record.label || `Run ${record.id}`} · ${date}`;
+    $("run-select").append(opt);
   }
+}
+
+async function loadRecord(id, updateUrl = true) {
+  const record = records.find(r => String(r.id) === String(id));
+  if (!record) return;
+  stop();
+  const res = await fetch(`./${record.path}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`record ${record.id}: HTTP ${res.status}`);
+  data = await res.json();
+  currentRecord = record;
+  pairIndex = 0;
+  step = 0;
+  $("run-select").value = String(record.id);
+  if (updateUrl) syncRunUrl();
+  initializeDataView();
+}
+
+function initializeDataView() {
+  $("run-link").href = data.meta.run_url;
+  $("step-max").textContent = data.meta.frames_per_worldline - 1;
+  $("step-range").max = data.meta.frames_per_worldline - 1;
+  renderOverview();
+  renderAll();
 }
 
 function renderOverview() {
@@ -70,7 +105,7 @@ function renderOverview() {
   const d = data.summary.dashscope;
   const metrics = [
     [
-      "Mean external events / 2 min",
+      "External events / 2 min",
       j.event_process.mean_events_per_worldline,
       d.event_process.mean_events_per_worldline,
       v => v.toFixed(1),
@@ -105,17 +140,18 @@ function renderOverview() {
 }
 
 function bindControls() {
-  $("world-select").addEventListener("change", e => selectWorldById(e.target.value));
-  $("random-world").addEventListener("click", () => {
-    let next = pairIndex;
-    while (next === pairIndex && data.pairs.length > 1) {
-      next = Math.floor(Math.random() * data.pairs.length);
+  $("run-select").addEventListener("change", async e => {
+    try {
+      await loadRecord(e.target.value);
+    } catch (err) {
+      $("loading").hidden = false;
+      $("loading").textContent = `Could not load saved run: ${err.message}`;
     }
-    pairIndex = next;
-    step = 0;
-    stop();
-    syncWorldUrl();
-    renderAll();
+  });
+
+  $("latest-run").addEventListener("click", async () => {
+    if (!records.length) return;
+    await loadRecord(records[0].id);
   });
 
   $("play-toggle").addEventListener("click", () => (playing ? stop() : play()));
@@ -153,26 +189,16 @@ function bindControls() {
   });
 }
 
-function selectWorldById(id) {
-  const idx = data.pairs.findIndex(p => String(p.id) === String(id));
-  if (idx < 0) return;
-  pairIndex = idx;
-  step = 0;
-  stop();
-  syncWorldUrl();
-  renderAll();
-}
-
 function currentPair() {
-  return data.pairs[pairIndex];
+  return data.pairs[0];
 }
 
-function syncWorldUrl() {
-  const pair = currentPair();
+function syncRunUrl() {
+  if (!currentRecord) return;
   const u = new URL(location.href);
-  u.searchParams.set("world", pair.id);
+  u.searchParams.set("run", currentRecord.id);
+  u.searchParams.delete("world");
   history.replaceState(null, "", u);
-  $("world-select").value = String(pair.id);
 }
 
 function seek(n) {
@@ -211,12 +237,23 @@ function setRoadPlaying(on) {
 }
 
 function renderAll() {
-  syncWorldUrl();
   const pair = currentPair();
-  $("world-id-label").textContent = `#${pair.id}`;
-  $("world-tags").innerHTML = pair.tags
+  $("run-id-label").textContent = currentRecord ? `#${currentRecord.id}` : `#${data.meta.run_id}`;
+
+  const tags = [];
+  if (currentRecord?.label) tags.push(currentRecord.label);
+  if (currentRecord?.note) tags.push(currentRecord.note);
+  if (currentRecord?.source_commit) tags.push(`commit ${currentRecord.source_commit.slice(0, 8)}`);
+  if (data.meta.seed) tags.push(`seed ${data.meta.seed}`);
+  for (const tag of pair.tags || []) {
+    if (!tags.includes(tag)) tags.push(tag);
+  }
+  $("world-tags").innerHTML = tags
     .map(t => `<span class="tag">${escapeHtml(t)}</span>`)
     .join("");
+
+  $("embed-note").textContent =
+    `${data.meta.duration_seconds}s · ${data.meta.physics_fps} physics fps · ${data.meta.decision_hz} Hz System One decisions · one paired world`;
   $("jev-model-id").textContent = pair.jev.reported_model || "";
   $("dash-model-id").textContent = pair.dashscope.reported_model || "";
 
