@@ -46,3 +46,12 @@ Keep the random seed fixed when comparing runtime/model changes so the sampled u
 ### Pre-persistence runs
 
 Compatible probability-world runs created before persistent run recording was introduced can be migrated from retained GitHub Actions artifacts into the same `runs/<run-id>/record.json` history. The original two-minute baseline run #36682237914 has been migrated this way.
+
+
+## Current safe-cruise iteration
+
+The latest saved Probability World runtime is `v3c-safe-cruise-following`.
+It starts with an 80 mph ego vehicle following a 72 mph lead at 60m, with a
+30m hard minimum gap, 50m comfortable target gap, and an 80±2 mph cruise
+envelope. This makes both providers exercise following control from the first
+frame while preserving the full historical replay chain.
