@@ -135,7 +135,7 @@
         <article class="panel chart-card">
           <div class="panel-title-row">
             <div><div class="eyebrow">SAVED RUN</div><h3>Front gap trajectory</h3></div>
-            <div class="legend"><span class="risk-line"></span>7m near-miss threshold</div>
+            <div class="legend"><span class="risk-line"></span>hard minimum gap</div>
           </div>
           <svg id="gap-chart" class="line-chart" viewBox="0 0 760 240"></svg>
         </article>
@@ -152,13 +152,13 @@
       <section class="notes-grid">
         <article class="panel prose-card">
           <div class="eyebrow">WHAT YOU ARE WATCHING</div>
-          <h3>A stochastic closed loop, not a scripted animation</h3>
-          <p>The road event is sampled from <code>P(event | state)</code>. After the event mutates the world, the driver action is sampled from <code>P(action | updated state)</code>. The chosen action is held for one decision second while physics integrates at 12 Hz; the resulting state becomes the next System One input.</p>
+          <h3>Probabilistic policy inside a hard safety envelope</h3>
+          <p>The road event is sampled from <code>P(event | state)</code>. Unsafe actor actions are filtered before System One sees them, then the sampled action is executed through a 12 Hz control-barrier shield. The shield may override the requested acceleration to preserve the configured minimum gap.</p>
         </article>
         <article class="panel prose-card">
-          <div class="eyebrow">IMPORTANT LIMITATION</div>
-          <h3>Semantic likelihood ≠ real-world base rate</h3>
-          <p>These event probabilities are zero-shot model judgments. They demonstrate a learned probability field, but they are not calibrated to actual traffic statistics. Aggregate cards describe this toy probability world only.</p>
+          <div class="eyebrow">CONTROL OBJECTIVE</div>
+          <h3>Hard gap constraint, soft 80 mph cruise target</h3>
+          <p>For safe-cruise runs, following distance is an invariant enforced by the runtime. Cruise speed and comfortable following distance are soft objectives expressed to the probabilistic controller; the page exposes when the runtime shield had to intervene.</p>
         </article>
       </section>
     </main>
