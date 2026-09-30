@@ -244,6 +244,7 @@ function renderAll() {
   if (currentRecord?.label) tags.push(currentRecord.label);
   if (currentRecord?.note) tags.push(currentRecord.note);
   if (currentRecord?.source_commit) tags.push(`commit ${currentRecord.source_commit.slice(0, 8)}`);
+  if (data.meta.runtime_variant) tags.push(data.meta.runtime_variant);
   if (data.meta.seed) tags.push(`seed ${data.meta.seed}`);
   for (const tag of pair.tags || []) {
     if (!tags.includes(tag)) tags.push(tag);
