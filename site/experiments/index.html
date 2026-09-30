@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>Experiments — System One Research</title>
+  <meta name="description" content="System One research experiment index." />
+  <link rel="stylesheet" href="../catalog.css" />
+</head>
+<body>
+  <main class="shell">
+    <nav class="breadcrumb"><a href="../">← System One Research</a></nav>
+    <header class="catalog-hero">
+      <div class="eyebrow">SYSTEM-ONE-RESEARCH / EXPERIMENTS</div>
+      <h1>Experiment Index</h1>
+      <p>Each experiment owns its own route, replay data, and visualization. New demos can be added without replacing the project root.</p>
+    </header>
+    <section class="section">
+      <div id="experiment-grid" class="experiment-grid"></div>
+    </section>
+    <footer>
+      <span>Routes: /experiments/&lt;experiment&gt;/</span>
+      <a href="https://github.com/BestNathan/system-one-research" target="_blank" rel="noreferrer">Repository ↗</a>
+    </footer>
+  </main>
+  <script>
+    document.body.dataset.manifest = "./manifest.json";
+    document.body.dataset.routePrefix = "./";
+  </script>
+  <script type="module" src="../catalog.js"></script>
+</body>
+</html>
