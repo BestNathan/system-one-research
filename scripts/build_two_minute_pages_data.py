@@ -28,6 +28,18 @@ def slim_frame(frame):
         "n": bool(frame["near_miss"]),
         "c": bool(frame["critical_gap"]),
         "x": bool(frame["collision_floor_hit"]),
+        "o": bool(frame.get("safety_override", False)),
+        "m": (
+            None
+            if frame.get("gap_margin_m") is None
+            else round(float(frame["gap_margin_m"]), 3)
+        ),
+        "ea": (
+            None
+            if frame.get("executed_acceleration_mps2") is None
+            else round(float(frame["executed_acceleration_mps2"]), 4)
+        ),
+        "r": frame.get("requested_action"),
     }
 
 
@@ -45,6 +57,13 @@ def slim_decision(row):
         "sampled_action": row["sampled_action"],
         "actor_argmax": row["actor_argmax"],
         "actor_draw": round(float(row["actor_draw"]), 6),
+        "shield_override_frames": int(row.get("shield_override_frames", 0)),
+        "mean_executed_acceleration_mps2": row.get(
+            "mean_executed_acceleration_mps2"
+        ),
+        "predicted_min_gap_by_action_m": row.get(
+            "predicted_min_gap_by_action_m"
+        ),
     }
 
 
@@ -168,6 +187,7 @@ def main():
             "decisions_per_worldline": js["decisions_per_worldline"],
             "decision_hz": js["decision_hz"],
             "runtime_variant": js.get("runtime_variant"),
+            "control": js.get("safe_cruise"),
             "record_id": args.record_id or str(args.run_id),
             "created_at": args.created_at,
             "commit_sha": args.commit_sha,
