@@ -75,7 +75,11 @@ def main():
         for item in manifest.get("records", [])
         if str(item.get("id")) != record_id
     ]
-    records.insert(0, entry)
+    records.append(entry)
+    records.sort(
+        key=lambda item: item.get("created_at") or "",
+        reverse=True,
+    )
     manifest["schema_version"] = 1
     manifest["records"] = records
 
