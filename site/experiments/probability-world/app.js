@@ -112,13 +112,13 @@ function renderOverview() {
     ],
     ["Near-miss rate", j.outcomes.near_miss_rate, d.outcomes.near_miss_rate, pct],
     [
-      "Mean minimum gap",
+      "Minimum gap",
       j.outcomes.min_gap_m.mean,
       d.outcomes.min_gap_m.mean,
-      v => `${v.toFixed(1)} m`,
+      v => v == null ? "clear" : `${v.toFixed(1)} m`,
     ],
     [
-      "Mean final speed",
+      "Final speed",
       j.outcomes.final_speed_mph.mean,
       d.outcomes.final_speed_mph.mean,
       v => `${v.toFixed(1)} mph`,
