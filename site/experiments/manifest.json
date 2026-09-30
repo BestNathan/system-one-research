@@ -4,7 +4,7 @@
     "title": "Probability World",
     "status": "live",
     "date": "2026-09-30",
-    "summary": "A two-minute stochastic driving world where System One separately generates external-event and driver-action probability distributions, then sampled decisions feed back through 12 Hz physics.",
+    "summary": "Iteratively saved two-minute stochastic worlds. Each run generates one paired Jev/DashScope trajectory, persists it, and keeps the full replay history browsable.",
     "tags": [
       "System 1",
       "Probability Field",
@@ -12,9 +12,9 @@
       "Closed Loop"
     ],
     "facts": [
+      "1 saved world / run",
       "2 minute replay",
       "12 physics FPS",
-      "1 Hz decisions",
       "Jev vs DashScope"
     ],
     "route": "probability-world/"
