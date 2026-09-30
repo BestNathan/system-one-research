@@ -17,7 +17,7 @@ from run_probabilistic_world import sample_distribution, usage_tokens
 
 
 DEFAULT_SEED = 20260930
-RUNTIME_VARIANT = "v3b-safe-cruise-envelope"
+RUNTIME_VARIANT = "v3c-safe-cruise-following"
 
 ACTION_ACCEL_MPS2 = {
     "hard_brake": -4.5,
@@ -85,7 +85,12 @@ def initial_state(
             "speed_limit_mph": max(90.0, target_speed_mph + 10.0),
             "surface": "dry",
             "visibility": "good",
-            "front_vehicle": None,
+            "front_vehicle": {
+                "distance_m": target_gap_m + 10.0,
+                "speed_mph": max(45.0, target_speed_mph - 8.0),
+                "desired_speed_mph": max(55.0, target_speed_mph - 4.0),
+                "source": "initial_following_baseline",
+            },
         },
         "traffic_context": {
             "traffic_density": 0.42,
@@ -93,8 +98,10 @@ def initial_state(
             "merge_pressure": 0.34,
             "traffic_flow_speed_mph": target_speed_mph - 2.0,
             "description": (
-                "Steady highway traffic. Most one-second intervals are uneventful. "
-                "Occasional cut-ins and lead-vehicle speed changes remain plausible."
+                "Steady highway traffic with an initial slower lead vehicle so the adaptive "
+                "cruise controller must demonstrate following-distance regulation from the "
+                "start. Most one-second intervals are uneventful; lead speed changes or lane "
+                "exit remain plausible."
             ),
         },
         "cruise": {

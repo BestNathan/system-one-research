@@ -186,8 +186,8 @@ jobs:
 
       - name: Build persistent replay record
         env:
-          RECORD_LABEL: "${{ github.event_name == 'workflow_dispatch' && inputs.label || 'v3b safe-cruise speed envelope' }}"
-          RECORD_NOTE: "${{ github.event_name == 'workflow_dispatch' && inputs.note || 'Adds a cruise-speed restoring action envelope: above the 80±2 mph band only decelerating actions remain; on clear road below the band only accelerating actions remain. The 30m minimum-gap invariant remains enforced by filtering plus the 12Hz barrier shield.' }}"
+          RECORD_LABEL: "${{ github.event_name == 'workflow_dispatch' && inputs.label || 'v3c safe-cruise following baseline' }}"
+          RECORD_NOTE: "${{ github.event_name == 'workflow_dispatch' && inputs.note || 'Starts with a slower lead vehicle at 60m / 72mph so both providers must demonstrate following-distance regulation from the first frame. The 30m hard minimum-gap invariant, 50m comfortable gap target, 80±2mph speed envelope, and 12Hz barrier shield remain active.' }}"
         run: |
           RECORD_ID="$GITHUB_RUN_ID"
           RECORD_DIR="site/experiments/probability-world/runs/$RECORD_ID"

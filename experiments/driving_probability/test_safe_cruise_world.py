@@ -27,6 +27,11 @@ class SafeCruiseWorldTest(unittest.TestCase):
         self.assertEqual(state["ego"]["speed_mph"], 80.0)
         self.assertEqual(state["cruise"]["min_gap_m"], 30.0)
         self.assertEqual(state["cruise"]["target_gap_m"], 50.0)
+        front = state["road"]["front_vehicle"]
+        self.assertIsNotNone(front)
+        self.assertEqual(front["distance_m"], 60.0)
+        self.assertEqual(front["speed_mph"], 72.0)
+        self.assertEqual(front["desired_speed_mph"], 76.0)
 
     def test_cut_in_respects_min_gap_with_margin(self):
         state = self.make_state()
@@ -85,6 +90,7 @@ class SafeCruiseWorldTest(unittest.TestCase):
 
     def test_overspeed_clear_road_forces_negative_actions(self):
         state = self.make_state()
+        state["road"]["front_vehicle"] = None
         state["ego"]["speed_mph"] = 90.0
         refresh_control_state(state, 12)
         actions = apply_speed_envelope(
@@ -96,6 +102,7 @@ class SafeCruiseWorldTest(unittest.TestCase):
 
     def test_underspeed_clear_road_forces_positive_actions(self):
         state = self.make_state()
+        state["road"]["front_vehicle"] = None
         state["ego"]["speed_mph"] = 60.0
         refresh_control_state(state, 12)
         actions = apply_speed_envelope(
@@ -106,6 +113,7 @@ class SafeCruiseWorldTest(unittest.TestCase):
 
     def test_cruise_band_does_not_allow_one_second_overshoot(self):
         state = self.make_state()
+        state["road"]["front_vehicle"] = None
         state["ego"]["speed_mph"] = 80.0
         refresh_control_state(state, 12)
         actions = apply_speed_envelope(
