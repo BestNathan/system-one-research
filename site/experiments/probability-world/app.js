@@ -9,6 +9,7 @@ const EVENT_LABELS = {
 const ACTION_LABELS = {
   hard_brake: "hard brake",
   brake: "brake",
+  coast: "coast",
   keep_speed: "keep speed",
   accelerate: "accelerate",
   hard_accelerate: "hard accelerate",
@@ -103,27 +104,55 @@ function initializeDataView() {
 function renderOverview() {
   const j = data.summary.jev;
   const d = data.summary.dashscope;
-  const metrics = [
-    [
-      "External events / 2 min",
-      j.event_process.mean_events_per_worldline,
-      d.event_process.mean_events_per_worldline,
-      v => v.toFixed(1),
-    ],
-    ["Near miss", j.outcomes.near_miss_rate, d.outcomes.near_miss_rate, v => v > 0 ? "yes" : "no"],
-    [
-      "Minimum gap",
-      j.outcomes.min_gap_m.mean,
-      d.outcomes.min_gap_m.mean,
-      v => v == null ? "clear" : `${v.toFixed(1)} m`,
-    ],
-    [
-      "Final speed",
-      j.outcomes.final_speed_mph.mean,
-      d.outcomes.final_speed_mph.mean,
-      v => `${v.toFixed(1)} mph`,
-    ],
-  ];
+  const control = data.meta.control;
+  const metrics = control
+    ? [
+        [
+          `Minimum gap · hard >= ${control.min_gap_m.toFixed(0)}m`,
+          j.outcomes.min_gap_m.mean,
+          d.outcomes.min_gap_m.mean,
+          v => v == null ? "clear" : `${v.toFixed(1)} m`,
+        ],
+        [
+          `Cruise band · ${control.target_speed_mph.toFixed(0)}±${control.speed_deadband_mph.toFixed(0)} mph`,
+          j.safe_cruise.free_cruise_band_rate,
+          d.safe_cruise.free_cruise_band_rate,
+          v => v == null ? "n/a" : pct(v),
+        ],
+        [
+          "Free-road speed MAE",
+          j.safe_cruise.free_speed_mae_mph,
+          d.safe_cruise.free_speed_mae_mph,
+          v => v == null ? "n/a" : `${v.toFixed(1)} mph`,
+        ],
+        [
+          "Safety-shield frames",
+          j.safe_cruise.shield_override_frames,
+          d.safe_cruise.shield_override_frames,
+          v => String(v),
+        ],
+      ]
+    : [
+        [
+          "External events / 2 min",
+          j.event_process.mean_events_per_worldline,
+          d.event_process.mean_events_per_worldline,
+          v => v.toFixed(1),
+        ],
+        ["Near miss", j.outcomes.near_miss_rate, d.outcomes.near_miss_rate, v => v > 0 ? "yes" : "no"],
+        [
+          "Minimum gap",
+          j.outcomes.min_gap_m.mean,
+          d.outcomes.min_gap_m.mean,
+          v => v == null ? "clear" : `${v.toFixed(1)} m`,
+        ],
+        [
+          "Final speed",
+          j.outcomes.final_speed_mph.mean,
+          d.outcomes.final_speed_mph.mean,
+          v => `${v.toFixed(1)} mph`,
+        ],
+      ];
 
   $("overview-grid").innerHTML = metrics
     .map(
@@ -245,6 +274,10 @@ function renderAll() {
   if (currentRecord?.note) tags.push(currentRecord.note);
   if (currentRecord?.source_commit) tags.push(`commit ${currentRecord.source_commit.slice(0, 8)}`);
   if (data.meta.runtime_variant) tags.push(data.meta.runtime_variant);
+  if (data.meta.control) {
+    tags.push(`target ${data.meta.control.target_speed_mph} mph`);
+    tags.push(`min gap ${data.meta.control.min_gap_m} m`);
+  }
   if (data.meta.seed) tags.push(`seed ${data.meta.seed}`);
   for (const tag of pair.tags || []) {
     if (!tags.includes(tag)) tags.push(tag);
@@ -339,8 +372,15 @@ function renderRoad(pre, row) {
 }
 
 function renderBadges(id, row) {
+  const control = data.meta.control;
   let html;
-  if (row.x) html = '<span class="badge danger">1m FLOOR</span>';
+  if (control && row.g != null && row.g < control.min_gap_m - 1e-6) {
+    html = '<span class="badge danger">INVARIANT VIOLATION</span>';
+  } else if (row.o) {
+    html = '<span class="badge warn">SAFETY SHIELD</span>';
+  } else if (control && row.g != null && row.m != null && row.m < 5) {
+    html = `<span class="badge warn">MARGIN +${row.m.toFixed(1)}m</span>`;
+  } else if (row.x) html = '<span class="badge danger">1m FLOOR</span>';
   else if (row.c) html = '<span class="badge danger">CRITICAL &lt;3m</span>';
   else if (row.n) html = '<span class="badge warn">NEAR MISS &lt;7m</span>';
   else html = '<span class="badge safe">NORMAL</span>';
@@ -355,7 +395,11 @@ function renderCharts() {
       { cls: "jev", values: pair.jev.frames.map(s => s.s) },
       { cls: "dash", values: pair.dashscope.frames.map(s => s.s) },
     ],
-    { min: 0, label: "mph" },
+    {
+      min: 0,
+      label: "mph",
+      target: data.meta.control?.target_speed_mph,
+    },
   );
 
   const gaps = [
@@ -369,7 +413,12 @@ function renderCharts() {
       { cls: "jev", values: pair.jev.frames.map(s => s.g) },
       { cls: "dash", values: pair.dashscope.frames.map(s => s.g) },
     ],
-    { min: 0, max: Math.max(30, ...gaps), label: "m", risk: 7 },
+    {
+      min: 0,
+      max: Math.max(30, ...gaps),
+      label: "m",
+      risk: data.meta.control?.min_gap_m ?? 7,
+    },
   );
 }
 
@@ -428,10 +477,15 @@ function renderLineChart(svg, series, opts = {}) {
     opts.risk != null && opts.risk >= min && opts.risk <= safeMax
       ? `<line class="chart-risk" x1="${pad.l}" y1="${y(opts.risk)}" x2="${W - pad.r}" y2="${y(opts.risk)}"/>`
       : "";
+  const target =
+    opts.target != null && opts.target >= min && opts.target <= safeMax
+      ? `<line class="chart-target" x1="${pad.l}" y1="${y(opts.target)}" x2="${W - pad.r}" y2="${y(opts.target)}"/>`
+      : "";
 
   svg.innerHTML =
     grid.join("") +
     risk +
+    target +
     paths +
     `<line class="chart-progress" x1="${x(step)}" y1="${pad.t}" x2="${x(step)}" y2="${H - pad.b}"/>`;
 }
@@ -488,6 +542,7 @@ function short(k) {
     .replace("vehicle_", "")
     .replace("hard_accelerate", "hard+")
     .replace("hard_brake", "hard-")
+    .replace("coast", "coast")
     .replace("keep_speed", "keep")
     .replace("accelerate", "accel")
     .replace("no_event", "none");
