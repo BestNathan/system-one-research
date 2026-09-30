@@ -22,9 +22,6 @@ on:
 
 permissions:
   contents: read
-  actions: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: two-minute-probability-worlds
@@ -52,7 +49,7 @@ jobs:
           python -m py_compile \
             experiments/driving_probability/run_two_minute_world.py \
             scripts/build_two_minute_pages_data.py
-          node --check site/app.js
+          node --check site/experiments/probability-world/app.js
       - name: Run tests
         working-directory: experiments/driving_probability
         run: |
@@ -124,43 +121,3 @@ jobs:
           path: results/two_minute/dashscope
           if-no-files-found: warn
 
-  deploy:
-    needs: [jev, dashscope]
-    if: ${{ always() && needs.jev.result == 'success' && needs.dashscope.result == 'success' }}
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: two-minute-world-jev
-          path: _artifacts/jev
-      - uses: actions/download-artifact@v4
-        with:
-          name: two-minute-world-dashscope
-          path: _artifacts/dashscope
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Build two-minute replay data
-        run: |
-          python scripts/build_two_minute_pages_data.py \
-            --jev-summary _artifacts/jev/summary.json \
-            --dashscope-summary _artifacts/dashscope/summary.json \
-            --jev-worldlines _artifacts/jev/worldlines.jsonl \
-            --dashscope-worldlines _artifacts/dashscope/worldlines.jsonl \
-            --run-id "$GITHUB_RUN_ID" \
-            --output site/data/probability-world.json \
-            --max-worldlines 24
-          test -s site/data/probability-world.json
-          du -h site/data/probability-world.json
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-      - name: Deploy two-minute demo
-        id: deployment
-        uses: actions/deploy-pages@v4
