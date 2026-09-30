@@ -3,10 +3,14 @@ name: two-minute probability worlds
 on:
   workflow_dispatch:
     inputs:
-      worldlines:
-        description: "Worldlines per provider"
-        required: true
-        default: "100"
+      label:
+        description: "Short label for this saved probability world"
+        required: false
+        default: ""
+      note:
+        description: "What changed in this iteration?"
+        required: false
+        default: ""
       duration_seconds:
         description: "Simulation duration in seconds"
         required: true
@@ -15,23 +19,22 @@ on:
         description: "Physics/render frames per second"
         required: true
         default: "12"
-      workers:
-        description: "Concurrent worldlines per provider"
+      seed:
+        description: "Matched random seed; keep fixed for controlled iteration"
         required: true
-        default: "8"
+        default: "20260930"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: two-minute-probability-worlds
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
-  WORLDLINES: "${{ github.event_name == 'workflow_dispatch' && inputs.worldlines || '100' }}"
-  DURATION_SECONDS: "${{ github.event_name == 'workflow_dispatch' && inputs.duration_seconds || '120' }}"
-  PHYSICS_FPS: "${{ github.event_name == 'workflow_dispatch' && inputs.physics_fps || '12' }}"
-  WORKERS: "${{ github.event_name == 'workflow_dispatch' && inputs.workers || '8' }}"
+  DURATION_SECONDS: "${{ inputs.duration_seconds }}"
+  PHYSICS_FPS: "${{ inputs.physics_fps }}"
+  SEED: "${{ inputs.seed }}"
 
 jobs:
   test:
@@ -48,7 +51,8 @@ jobs:
         run: |
           python -m py_compile \
             experiments/driving_probability/run_two_minute_world.py \
-            scripts/build_two_minute_pages_data.py
+            scripts/build_two_minute_pages_data.py \
+            scripts/register_probability_world_record.py
           node --check site/experiments/probability-world/app.js
       - name: Run tests
         working-directory: experiments/driving_probability
@@ -60,11 +64,10 @@ jobs:
             test_two_minute_world.py
 
   jev:
-    if: ${{ github.ref == 'refs/heads/main' }}
     needs: test
     environment: typesafe
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 60
     env:
       TYPESAFE_API_KEY: "${{ secrets.TYPESAFE_API_KEY }}"
     steps:
@@ -73,14 +76,15 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install "httpx>=0.27,<1"
-      - name: Run Jev two-minute worlds
+      - name: Run one Jev probability world
         run: |
           python experiments/driving_probability/run_two_minute_world.py \
             --backend jev \
-            --worldlines "$WORLDLINES" \
+            --worldlines 1 \
             --duration-seconds "$DURATION_SECONDS" \
             --physics-fps "$PHYSICS_FPS" \
-            --workers "$WORKERS" \
+            --workers 1 \
+            --seed-base "$SEED" \
             --output results/two_minute/jev
       - uses: actions/upload-artifact@v4
         if: always()
@@ -90,11 +94,10 @@ jobs:
           if-no-files-found: warn
 
   dashscope:
-    if: ${{ github.ref == 'refs/heads/main' }}
     needs: test
     environment: dashscope
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 60
     env:
       DASHSCOPE_API_KEY: "${{ secrets.DASHSCOPE_API_KEY }}"
       DASHSCOPE_SYSTEMONE_URL: "https://llm-cnwlvwjfb3z4aa29.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/systemone"
@@ -105,14 +108,15 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install "httpx>=0.27,<1"
-      - name: Run DashScope two-minute worlds
+      - name: Run one DashScope probability world
         run: |
           python experiments/driving_probability/run_two_minute_world.py \
             --backend dashscope \
-            --worldlines "$WORLDLINES" \
+            --worldlines 1 \
             --duration-seconds "$DURATION_SECONDS" \
             --physics-fps "$PHYSICS_FPS" \
-            --workers "$WORKERS" \
+            --workers 1 \
+            --seed-base "$SEED" \
             --output results/two_minute/dashscope
       - uses: actions/upload-artifact@v4
         if: always()
@@ -121,3 +125,66 @@ jobs:
           path: results/two_minute/dashscope
           if-no-files-found: warn
 
+  save-record:
+    needs: [jev, dashscope]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: two-minute-world-jev
+          path: _artifacts/jev
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: two-minute-world-dashscope
+          path: _artifacts/dashscope
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build persistent replay record
+        env:
+          RECORD_LABEL: "${{ inputs.label }}"
+          RECORD_NOTE: "${{ inputs.note }}"
+        run: |
+          RECORD_ID="$GITHUB_RUN_ID"
+          RECORD_DIR="site/experiments/probability-world/runs/$RECORD_ID"
+          CREATED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+          python scripts/build_two_minute_pages_data.py \
+            --jev-summary _artifacts/jev/summary.json \
+            --dashscope-summary _artifacts/dashscope/summary.json \
+            --jev-worldlines _artifacts/jev/worldlines.jsonl \
+            --dashscope-worldlines _artifacts/dashscope/worldlines.jsonl \
+            --run-id "$GITHUB_RUN_ID" \
+            --record-id "$RECORD_ID" \
+            --created-at "$CREATED_AT" \
+            --commit-sha "$GITHUB_SHA" \
+            --label "$RECORD_LABEL" \
+            --note "$RECORD_NOTE" \
+            --seed "$SEED" \
+            --output "$RECORD_DIR/record.json" \
+            --max-worldlines 1
+
+          python scripts/register_probability_world_record.py \
+            --record "$RECORD_DIR/record.json" \
+            --manifest site/experiments/probability-world/runs/manifest.json
+
+          test -s "$RECORD_DIR/record.json"
+          cat site/experiments/probability-world/runs/manifest.json
+
+      - name: Commit saved probability world
+        run: |
+          git config user.name "system-one-research bot"
+          git config user.email "actions@users.noreply.github.com"
+          git pull --rebase origin main
+          git add site/experiments/probability-world/runs/
+          git commit -m "research: save probability world run $GITHUB_RUN_ID"
+          git push origin HEAD:main
