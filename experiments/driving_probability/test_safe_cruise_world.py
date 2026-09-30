@@ -4,6 +4,7 @@ from run_safe_cruise_world import (
     ACTION_ACCEL_MPS2,
     actor_question,
     apply_event,
+    apply_speed_envelope,
     event_question,
     hard_brake_event_feasible,
     initial_state,
@@ -81,6 +82,40 @@ class SafeCruiseWorldTest(unittest.TestCase):
         self.assertFalse(hard_brake_event_feasible(state, 12))
         keys = set(event_question(state, 12)["criteria"])
         self.assertNotIn("lead_vehicle_hard_brake", keys)
+
+    def test_overspeed_clear_road_forces_negative_actions(self):
+        state = self.make_state()
+        state["ego"]["speed_mph"] = 90.0
+        refresh_control_state(state, 12)
+        actions = apply_speed_envelope(
+            state,
+            ["hard_brake", "brake", "coast", "keep_speed", "accelerate"],
+        )
+        self.assertTrue(actions)
+        self.assertTrue(all(ACTION_ACCEL_MPS2[a] < 0 for a in actions))
+
+    def test_underspeed_clear_road_forces_positive_actions(self):
+        state = self.make_state()
+        state["ego"]["speed_mph"] = 60.0
+        refresh_control_state(state, 12)
+        actions = apply_speed_envelope(
+            state,
+            ["brake", "coast", "keep_speed", "accelerate", "hard_accelerate"],
+        )
+        self.assertEqual(actions, ["accelerate", "hard_accelerate"])
+
+    def test_cruise_band_does_not_allow_one_second_overshoot(self):
+        state = self.make_state()
+        state["ego"]["speed_mph"] = 80.0
+        refresh_control_state(state, 12)
+        actions = apply_speed_envelope(
+            state,
+            ["coast", "keep_speed", "accelerate", "hard_accelerate"],
+        )
+        self.assertIn("keep_speed", actions)
+        self.assertIn("coast", actions)
+        self.assertNotIn("accelerate", actions)
+        self.assertNotIn("hard_accelerate", actions)
 
     def test_actor_question_only_contains_safe_actions(self):
         state = self.make_state()
