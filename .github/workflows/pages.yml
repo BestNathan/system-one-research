@@ -34,17 +34,18 @@ jobs:
       - name: Check for persistent probability-world records
         id: history
         run: |
-          python - <<'PY'
+          HAS_RECORDS="$(python - <<'PY'
           import json
           from pathlib import Path
           path = Path("site/experiments/probability-world/runs/manifest.json")
           records = []
           if path.exists():
               records = json.loads(path.read_text()).get("records", [])
-          with open("$GITHUB_OUTPUT", "a") as f:
-              f.write(f"has_records={'true' if records else 'false'}\n")
-          print(f"persistent probability-world records: {len(records)}")
+          print("true" if records else "false")
           PY
+          )"
+          echo "has_records=$HAS_RECORDS" >> "$GITHUB_OUTPUT"
+          echo "persistent probability-world records: $HAS_RECORDS"
 
       - name: Download legacy Jev replay for bootstrap
         if: steps.history.outputs.has_records != 'true'
