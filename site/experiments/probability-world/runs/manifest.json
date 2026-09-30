@@ -1,4 +1,38 @@
 {
   "schema_version": 1,
-  "records": []
+  "records": [
+    {
+      "id": "36697168218",
+      "created_at": "2026-09-30T09:38:14Z",
+      "label": "v2 state-policy fix",
+      "note": "Mask braking at zero speed; replace categorical last_action with 2-step acceleration history; prune front vehicle beyond 120m.",
+      "source_commit": "5a547d46f6f0fe9da34c7b350770b92bbb4a29ba",
+      "workflow_run_id": 36697168218,
+      "workflow_run_url": "https://github.com/BestNathan/system-one-research/actions/runs/36697168218",
+      "seed": "20260930",
+      "duration_seconds": 120,
+      "physics_fps": 12,
+      "decision_hz": 1,
+      "runtime_variant": "v2-state-policy",
+      "models": {
+        "jev": "jev-1.13.0",
+        "dashscope": "decision-model-preview"
+      },
+      "outcomes": {
+        "jev": {
+          "events": 37,
+          "near_miss": false,
+          "critical_gap": false,
+          "final_speed_mph": 44.73872584108803
+        },
+        "dashscope": {
+          "events": 11,
+          "near_miss": false,
+          "critical_gap": false,
+          "final_speed_mph": 0.0
+        }
+      },
+      "path": "runs/36697168218/record.json"
+    }
+  ]
 }
