@@ -110,7 +110,7 @@ function renderOverview() {
       d.event_process.mean_events_per_worldline,
       v => v.toFixed(1),
     ],
-    ["Near-miss rate", j.outcomes.near_miss_rate, d.outcomes.near_miss_rate, pct],
+    ["Near miss", j.outcomes.near_miss_rate, d.outcomes.near_miss_rate, v => v > 0 ? "yes" : "no"],
     [
       "Minimum gap",
       j.outcomes.min_gap_m.mean,
