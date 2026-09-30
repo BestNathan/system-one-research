@@ -1,7 +1,23 @@
-name: deploy probability world pages
+name: deploy system one research pages
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "scripts/build_two_minute_pages_data.py"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
+    inputs:
+      probability_world_run_id:
+        description: "Workflow run containing two-minute probability-world artifacts"
+        required: true
+        default: "36682237914"
+  workflow_run:
+    workflows:
+      - "two-minute probability worlds"
+    types:
+      - completed
 
 permissions:
   contents: read
@@ -10,14 +26,15 @@ permissions:
   id-token: write
 
 concurrency:
-  group: probability-world-pages
+  group: system-one-research-pages
   cancel-in-progress: true
 
 env:
-  PROBABILITY_WORLD_RUN_ID: "36602604927"
+  PROBABILITY_WORLD_RUN_ID: "${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || github.event_name == 'workflow_dispatch' && inputs.probability_world_run_id || '36682237914' }}"
 
 jobs:
   deploy:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -25,19 +42,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Jev probability worlds
+      - name: Download Jev probability-world artifacts
         uses: actions/download-artifact@v4
         with:
-          name: probabilistic-world-jev
-          path: _artifacts/jev
+          name: two-minute-world-jev
+          path: _artifacts/probability-world/jev
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ env.PROBABILITY_WORLD_RUN_ID }}
 
-      - name: Download DashScope probability worlds
+      - name: Download DashScope probability-world artifacts
         uses: actions/download-artifact@v4
         with:
-          name: probabilistic-world-dashscope
-          path: _artifacts/dashscope
+          name: two-minute-world-dashscope
+          path: _artifacts/probability-world/dashscope
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ env.PROBABILITY_WORLD_RUN_ID }}
 
@@ -45,29 +62,34 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build compact Pages replay data
+      - name: Build probability-world route data
         run: |
-          python scripts/build_probabilistic_world_pages_data.py \
-            --jev-summary _artifacts/jev/summary.json \
-            --dashscope-summary _artifacts/dashscope/summary.json \
-            --jev-worldlines _artifacts/jev/worldlines.jsonl \
-            --dashscope-worldlines _artifacts/dashscope/worldlines.jsonl \
+          python scripts/build_two_minute_pages_data.py \
+            --jev-summary _artifacts/probability-world/jev/summary.json \
+            --dashscope-summary _artifacts/probability-world/dashscope/summary.json \
+            --jev-worldlines _artifacts/probability-world/jev/worldlines.jsonl \
+            --dashscope-worldlines _artifacts/probability-world/dashscope/worldlines.jsonl \
             --run-id "$PROBABILITY_WORLD_RUN_ID" \
-            --output site/data/probability-world.json \
-            --max-worldlines 56
-          test -s site/data/probability-world.json
-          du -h site/data/probability-world.json
+            --output site/experiments/probability-world/data/probability-world.json \
+            --max-worldlines 24
+          test -s site/experiments/probability-world/data/probability-world.json
+          du -h site/experiments/probability-world/data/probability-world.json
 
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
+      - name: Check static routes
+        run: |
+          test -s site/index.html
+          test -s site/experiments/index.html
+          test -s site/experiments/manifest.json
+          test -s site/experiments/probability-world/index.html
+          node --check site/catalog.js
+          node --check site/experiments/probability-world/app.js
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy research site
         id: deployment
         uses: actions/deploy-pages@v4
