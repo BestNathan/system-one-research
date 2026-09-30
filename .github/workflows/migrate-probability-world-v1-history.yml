@@ -1,0 +1,103 @@
+name: migrate probability world v1 history
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/migrate-probability-world-v1-history.yml"
+      - "scripts/register_probability_world_record.py"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SOURCE_RUN_ID: "36682237914"
+      RECORD_ID: "36682237914"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Skip if already migrated
+        id: existing
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          path = Path("site/experiments/probability-world/runs/manifest.json")
+          records = json.loads(path.read_text()).get("records", []) if path.exists() else []
+          print("exists=" + ("true" if any(str(x.get("id")) == "36682237914" for x in records) else "false"))
+          PY
+
+      - name: Download legacy Jev artifact
+        if: steps.existing.outputs.exists != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: two-minute-world-jev
+          path: _artifacts/jev
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+
+      - name: Download legacy DashScope artifact
+        if: steps.existing.outputs.exists != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: two-minute-world-dashscope
+          path: _artifacts/dashscope
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+
+      - uses: actions/setup-python@v5
+        if: steps.existing.outputs.exists != 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Build v1 historical replay
+        if: steps.existing.outputs.exists != 'true'
+        run: |
+          RECORD_DIR="site/experiments/probability-world/runs/$RECORD_ID"
+
+          python scripts/build_two_minute_pages_data.py \
+            --jev-summary _artifacts/jev/summary.json \
+            --dashscope-summary _artifacts/dashscope/summary.json \
+            --jev-worldlines _artifacts/jev/worldlines.jsonl \
+            --dashscope-worldlines _artifacts/dashscope/worldlines.jsonl \
+            --run-id "$SOURCE_RUN_ID" \
+            --record-id "$RECORD_ID" \
+            --created-at "2026-09-30T07:10:54Z" \
+            --commit-sha "3e8f605beec3a654285faff95e08b931fe7f89e5" \
+            --label "v1 two-minute baseline" \
+            --note "Legacy 100-world batch. This saved replay uses matched worldline #0, the trajectory used to diagnose DashScope's brake attractor before the v2 state-policy fix." \
+            --seed "20260930" \
+            --output "$RECORD_DIR/record.json" \
+            --max-worldlines 1
+
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path("site/experiments/probability-world/runs/36682237914/record.json")
+          record = json.loads(path.read_text())
+          record["meta"]["runtime_variant"] = "v1-legacy"
+          path.write_text(json.dumps(record, separators=(",", ":")))
+          PY
+
+          python scripts/register_probability_world_record.py \
+            --record "$RECORD_DIR/record.json" \
+            --manifest site/experiments/probability-world/runs/manifest.json
+
+      - name: Commit migrated history
+        if: steps.existing.outputs.exists != 'true'
+        run: |
+          git config user.name "system-one-research bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add site/experiments/probability-world/runs/
+          git commit -m "research: migrate probability world v1 history"
+          git pull --rebase origin main
+          git push origin HEAD:main
