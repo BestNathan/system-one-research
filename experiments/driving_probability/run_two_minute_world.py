@@ -25,6 +25,62 @@ from run_experiment import mph_to_mps, mps_to_mph
 
 
 DEFAULT_SEED = 20260930
+RUNTIME_VARIANT = "v2-state-policy"
+LOW_SPEED_BRAKE_MASK_MPH = 0.5
+RECENT_ACTION_MAX_AGE_STEPS = 2
+MAX_RELEVANT_FRONT_GAP_M = 120.0
+
+
+def initial_state_v2() -> dict[str, Any]:
+    state = initial_state()
+    history = state["recent_history"]
+    history.pop("last_action", None)
+    history["actions"] = []
+    state["runtime_policy"] = {
+        "variant": RUNTIME_VARIANT,
+        "low_speed_brake_mask_mph": LOW_SPEED_BRAKE_MASK_MPH,
+        "recent_action_max_age_steps": RECENT_ACTION_MAX_AGE_STEPS,
+        "max_relevant_front_gap_m": MAX_RELEVANT_FRONT_GAP_M,
+    }
+    return state
+
+
+def age_recent_actions(state: dict[str, Any]) -> None:
+    history = state["recent_history"]
+    aged = []
+    for item in history.get("actions", []):
+        next_item = dict(item)
+        next_item["age_steps"] = int(next_item.get("age_steps", 0)) + 1
+        if next_item["age_steps"] <= RECENT_ACTION_MAX_AGE_STEPS:
+            aged.append(next_item)
+    history["actions"] = aged
+
+
+def actor_question(state: dict[str, Any]) -> dict[str, Any]:
+    question = deepcopy(QUESTION["decision"])
+    speed_mph = float(state["ego"]["speed_mph"])
+    if speed_mph <= LOW_SPEED_BRAKE_MASK_MPH:
+        question["criteria"] = {
+            key: value
+            for key, value in question["criteria"].items()
+            if key not in ("hard_brake", "brake")
+        }
+        question["instructions"] += (
+            " Actions that cannot materially change the current physical state are omitted "
+            "from the available action set. At effectively zero speed, braking actions are "
+            "not feasible and must not be inferred."
+        )
+    return question
+
+
+def prune_irrelevant_front_vehicle(state: dict[str, Any]) -> bool:
+    front = state["road"].get("front_vehicle")
+    if front is None:
+        return False
+    if float(front["distance_m"]) <= MAX_RELEVANT_FRONT_GAP_M:
+        return False
+    state["road"]["front_vehicle"] = None
+    return True
 
 
 def percentile(values: list[float], p: float) -> float | None:
@@ -72,6 +128,9 @@ def physics_frame(
         floor_hit = gap_after <= 1.000001
 
     relax_lead_vehicle(state, dt)
+    if prune_irrelevant_front_vehicle(state):
+        gap_after = None
+        near_miss = critical_gap = floor_hit = False
     return speed_after, gap_after, near_miss, critical_gap, floor_hit
 
 
@@ -85,7 +144,7 @@ def run_worldline(
 ) -> dict[str, Any]:
     event_rng = random.Random(seed_base + worldline_id * 2)
     actor_rng = random.Random(seed_base + worldline_id * 2 + 1)
-    state = initial_state()
+    state = initial_state_v2()
     state["prediction_horizon_seconds"] = 1.0
 
     dt = 1.0 / physics_fps
@@ -107,6 +166,7 @@ def run_worldline(
     for second in range(duration_seconds):
         if second > 0:
             age_recent_history(state, max_age_steps=5)
+            age_recent_actions(state)
 
         state["time_step"] = second
         state["time_seconds"] = float(second)
@@ -133,10 +193,12 @@ def run_worldline(
                 first_event_second = second
         apply_event(state, sampled_event)
 
+        actor_q = actor_question(state)
+        actor_keys = list(actor_q["criteria"].keys())
         actor_probs, actor_body, actor_ms = backend.decide_choice(
             deepcopy(state),
             "driver_action",
-            QUESTION["decision"],
+            actor_q,
         )
         in_tok, out_tok = usage_tokens(actor_body.get("usage"))
         input_tokens += in_tok
@@ -144,7 +206,7 @@ def run_worldline(
 
         sampled_action, actor_draw = sample_distribution(
             actor_probs,
-            ACTION_ORDER,
+            actor_keys,
             actor_rng,
         )
         if sampled_action == "hard_brake":
@@ -208,7 +270,12 @@ def run_worldline(
                 }
             )
 
-        state["recent_history"]["last_action"] = sampled_action
+        state["recent_history"]["actions"].append(
+            {
+                "longitudinal_acceleration_mps2": ACTION_ACCEL_MPS2[sampled_action],
+                "age_steps": 0,
+            }
+        )
 
         decisions.append(
             {
@@ -221,10 +288,11 @@ def run_worldline(
                 "event_draw": event_draw,
                 "event_argmax": max(event_keys, key=lambda k: event_probs[k]),
                 "event_elapsed_ms": event_ms,
+                "actor_options": actor_keys,
                 "actor_probabilities": actor_probs,
                 "sampled_action": sampled_action,
                 "actor_draw": actor_draw,
-                "actor_argmax": max(ACTION_ORDER, key=lambda k: actor_probs[k]),
+                "actor_argmax": max(actor_keys, key=lambda k: actor_probs[k]),
                 "actor_elapsed_ms": actor_ms,
                 "speed_before_mph": speed_before,
                 "speed_after_mph": float(state["ego"]["speed_mph"]),
@@ -249,6 +317,7 @@ def run_worldline(
         "event_seed": seed_base + worldline_id * 2,
         "actor_seed": seed_base + worldline_id * 2 + 1,
         "reported_model": backend.reported_model,
+        "runtime_variant": RUNTIME_VARIANT,
         "duration_seconds": duration_seconds,
         "physics_fps": physics_fps,
         "frames": frames,
@@ -301,6 +370,7 @@ def aggregate(
     event_eligible = Counter()
     event_predicted_mass = Counter()
     actor_samples = Counter()
+    actor_eligible = Counter()
     actor_predicted_mass = Counter()
     event_latency: list[float] = []
     actor_latency: list[float] = []
@@ -317,8 +387,11 @@ def aggregate(
             for key in row["event_options"]:
                 event_eligible[key] += 1
                 event_predicted_mass[key] += float(row["event_probabilities"][key])
-            for key in ACTION_ORDER:
-                actor_predicted_mass[key] += float(row["actor_probabilities"][key])
+            for key in row.get("actor_options", ACTION_ORDER):
+                actor_eligible[key] += 1
+                actor_predicted_mass[key] += float(
+                    row["actor_probabilities"].get(key, 0.0)
+                )
 
     event_calibration = {}
     for event in EVENT_ORDER:
@@ -334,13 +407,16 @@ def aggregate(
             "difference": empirical - predicted,
         }
 
-    actor_calls = sum(actor_samples.values())
     actor_calibration = {}
     for action in ACTION_ORDER:
-        empirical = actor_samples[action] / actor_calls
-        predicted = actor_predicted_mass[action] / actor_calls
+        eligible = actor_eligible[action]
+        if eligible <= 0:
+            continue
+        empirical = actor_samples[action] / eligible
+        predicted = actor_predicted_mass[action] / eligible
         actor_calibration[action] = {
-            "empirical_frequency": empirical,
+            "eligible_calls": eligible,
+            "empirical_frequency_when_eligible": empirical,
             "mean_predicted_probability": predicted,
             "difference": empirical - predicted,
         }
@@ -358,6 +434,7 @@ def aggregate(
         "backend": backend,
         "requested_model": requested_model,
         "reported_model": completed[0].get("reported_model"),
+        "runtime_variant": completed[0].get("runtime_variant", RUNTIME_VARIANT),
         "worldlines_requested": len(worldlines),
         "worldlines_completed": n,
         "worldline_errors": len(worldlines) - n,
