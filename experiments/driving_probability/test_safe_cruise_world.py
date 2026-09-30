@@ -27,6 +27,11 @@ class SafeCruiseWorldTest(unittest.TestCase):
         self.assertEqual(state["ego"]["speed_mph"], 80.0)
         self.assertEqual(state["cruise"]["min_gap_m"], 30.0)
         self.assertEqual(state["cruise"]["target_gap_m"], 50.0)
+        front = state["road"]["front_vehicle"]
+        self.assertIsNotNone(front)
+        self.assertEqual(front["distance_m"], 60.0)
+        self.assertEqual(front["speed_mph"], 72.0)
+        self.assertEqual(front["desired_speed_mph"], 76.0)
 
     def test_cut_in_respects_min_gap_with_margin(self):
         state = self.make_state()
