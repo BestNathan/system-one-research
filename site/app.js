@@ -31,8 +31,8 @@ async function init() {
     data = await res.json();
 
     $("run-link").href = data.meta.run_url;
-    $("step-max").textContent = data.meta.steps_per_worldline - 1;
-    $("step-range").max = data.meta.steps_per_worldline - 1;
+    $("step-max").textContent = data.meta.frames_per_worldline - 1;
+    $("step-range").max = data.meta.frames_per_worldline - 1;
 
     populateWorldSelect();
     renderOverview();
@@ -46,7 +46,7 @@ async function init() {
 
     $("world-select").value = String(data.pairs[pairIndex].id);
     $("embed-note").textContent =
-      `${data.meta.worldlines_embedded} representative pairs embedded · aggregate cards use all ${data.meta.worldlines_total_per_model.toLocaleString()} per model`;
+      `${data.meta.worldlines_embedded} representative pairs embedded · ${data.meta.physics_fps} physics fps · ${data.meta.duration_seconds}s · aggregate cards use all ${data.meta.worldlines_total_per_model.toLocaleString()} per model`;
 
     $("loading").hidden = true;
     $("app").hidden = false;
@@ -70,10 +70,10 @@ function renderOverview() {
   const d = data.summary.dashscope;
   const metrics = [
     [
-      "Mean external events / world",
+      "Mean external events / 2 min",
       j.event_process.mean_events_per_worldline,
       d.event_process.mean_events_per_worldline,
-      v => v.toFixed(2),
+      v => v.toFixed(1),
     ],
     ["Near-miss rate", j.outcomes.near_miss_rate, d.outcomes.near_miss_rate, pct],
     [
@@ -176,20 +176,20 @@ function syncWorldUrl() {
 }
 
 function seek(n) {
-  const max = data.meta.steps_per_worldline - 1;
+  const max = data.meta.frames_per_worldline - 1;
   step = Math.max(0, Math.min(max, n));
   renderStep();
 }
 
 function play() {
-  if (step >= data.meta.steps_per_worldline - 1) step = 0;
+  if (step >= data.meta.frames_per_worldline - 1) step = 0;
   playing = true;
   $("play-toggle").textContent = "Pause";
   setRoadPlaying(true);
   renderStep();
 
   timer = setInterval(() => {
-    if (step >= data.meta.steps_per_worldline - 1) {
+    if (step >= data.meta.frames_per_worldline - 1) {
       stop();
       return;
     }
@@ -225,32 +225,38 @@ function renderAll() {
 }
 
 function renderStep() {
-  $("step-number").textContent = step;
+  const pair = currentPair();
+  const jevState = pair.jev.frames[step];
+  const dashState = pair.dashscope.frames[step];
+  const decisionIndex = Math.min(
+    data.meta.decisions_per_worldline - 1,
+    Math.floor(step / data.meta.physics_fps),
+  );
+  const jevDecision = pair.jev.decisions[decisionIndex];
+  const dashDecision = pair.dashscope.decisions[decisionIndex];
+
+  const currentTime = (step + 1) / data.meta.physics_fps;
+  $("step-number").textContent = `${formatTime(currentTime)} · ${step}`;
   $("step-range").value = step;
 
-  const pair = currentPair();
-  const jev = pair.jev.steps[step];
-  const dash = pair.dashscope.steps[step];
-
-  renderModel("jev", jev);
-  renderModel("dashscope", dash);
+  renderModel("jev", jevState, jevDecision);
+  renderModel("dashscope", dashState, dashDecision);
 
   document
     .querySelectorAll(".timeline-step")
-    .forEach((el, i) => el.classList.toggle("active", i === step));
+    .forEach(el => el.classList.toggle("active", Number(el.dataset.second) === decisionIndex));
 
-  renderCharts();
+  if (step % 3 === 0 || step === data.meta.frames_per_worldline - 1) renderCharts();
 
-  const delta = Math.abs(jev.speed_after_mph - dash.speed_after_mph);
+  const delta = Math.abs(jevState.s - dashState.s);
   $("divergence-now").textContent =
-    `Δspeed ${delta.toFixed(1)} mph · event ${jev.sampled_event === dash.sampled_event ? "same" : "split"} · action ${jev.sampled_action === dash.sampled_action ? "same" : "split"}`;
+    `t=${formatTime(currentTime)} · Δspeed ${delta.toFixed(1)} mph · event ${jevDecision.sampled_event === dashDecision.sampled_event ? "same" : "split"} · action ${jevDecision.sampled_action === dashDecision.sampled_action ? "same" : "split"}`;
 }
 
-function renderModel(key, row) {
+function renderModel(key, state, row) {
   const pre = MODEL[key].prefix;
-  $(`${pre}-speed`).textContent = `${row.speed_after_mph.toFixed(1)} mph`;
-  $(`${pre}-gap`).textContent =
-    row.front_gap_after_m == null ? "clear" : `${row.front_gap_after_m.toFixed(1)} m`;
+  $(`${pre}-speed`).textContent = `${state.s.toFixed(1)} mph`;
+  $(`${pre}-gap`).textContent = state.g == null ? "clear" : `${state.g.toFixed(1)} m`;
   $(`${pre}-event`).textContent = labelEvent(row.sampled_event);
   $(`${pre}-action`).textContent = labelAction(row.sampled_action);
   $(`${pre}-event-draw`).textContent =
@@ -260,8 +266,8 @@ function renderModel(key, row) {
 
   renderBars(`${pre}-event-bars`, row.event_probabilities, row.sampled_event, "event");
   renderBars(`${pre}-action-bars`, row.actor_probabilities, row.sampled_action, "action");
-  renderRoad(pre, row);
-  renderBadges(`${pre}-risk-badges`, row);
+  renderRoad(pre, state);
+  renderBadges(`${pre}-risk-badges`, state);
 }
 
 function renderBars(id, probs, sampled, kind) {
@@ -282,7 +288,7 @@ function renderRoad(pre, row) {
   const lead = $(`${pre}-lead`);
   const clear = $(`${pre}-clear`);
 
-  if (row.front_gap_after_m == null) {
+  if (row.g == null) {
     lead.style.opacity = "0";
     clear.style.opacity = "1";
     return;
@@ -290,15 +296,15 @@ function renderRoad(pre, row) {
 
   lead.style.opacity = "1";
   clear.style.opacity = "0";
-  const left = 27 + Math.min(55, Math.max(0, (row.front_gap_after_m / 50) * 55));
+  const left = 27 + Math.min(55, Math.max(0, (row.g / 50) * 55));
   lead.style.left = `${left}%`;
 }
 
 function renderBadges(id, row) {
   let html;
-  if (row.collision_floor_hit) html = '<span class="badge danger">1m FLOOR</span>';
-  else if (row.critical_gap) html = '<span class="badge danger">CRITICAL &lt;3m</span>';
-  else if (row.near_miss) html = '<span class="badge warn">NEAR MISS &lt;7m</span>';
+  if (row.x) html = '<span class="badge danger">1m FLOOR</span>';
+  else if (row.c) html = '<span class="badge danger">CRITICAL &lt;3m</span>';
+  else if (row.n) html = '<span class="badge warn">NEAR MISS &lt;7m</span>';
   else html = '<span class="badge safe">NORMAL</span>';
   $(id).innerHTML = html;
 }
@@ -308,22 +314,22 @@ function renderCharts() {
   renderLineChart(
     $("speed-chart"),
     [
-      { cls: "jev", values: pair.jev.steps.map(s => s.speed_after_mph) },
-      { cls: "dash", values: pair.dashscope.steps.map(s => s.speed_after_mph) },
+      { cls: "jev", values: pair.jev.frames.map(s => s.s) },
+      { cls: "dash", values: pair.dashscope.frames.map(s => s.s) },
     ],
     { min: 0, label: "mph" },
   );
 
   const gaps = [
-    ...pair.jev.steps.map(s => s.front_gap_after_m),
-    ...pair.dashscope.steps.map(s => s.front_gap_after_m),
+    ...pair.jev.frames.map(s => s.g),
+    ...pair.dashscope.frames.map(s => s.g),
   ].filter(v => v != null);
 
   renderLineChart(
     $("gap-chart"),
     [
-      { cls: "jev", values: pair.jev.steps.map(s => s.front_gap_after_m) },
-      { cls: "dash", values: pair.dashscope.steps.map(s => s.front_gap_after_m) },
+      { cls: "jev", values: pair.jev.frames.map(s => s.g) },
+      { cls: "dash", values: pair.dashscope.frames.map(s => s.g) },
     ],
     { min: 0, max: Math.max(30, ...gaps), label: "m", risk: 7 },
   );
@@ -352,8 +358,9 @@ function renderLineChart(svg, series, opts = {}) {
     );
   }
 
-  for (let i = 0; i < n; i += 3) {
-    grid.push(`<text class="chart-axis-label" x="${x(i) - 3}" y="${H - 6}">${i}</text>`);
+  for (const sec of [0, 30, 60, 90, 120]) {
+    const i = Math.min(n - 1, Math.round(sec * data.meta.physics_fps));
+    grid.push(`<text class="chart-axis-label" x="${x(i) - 9}" y="${H - 6}">${sec}s</text>`);
   }
 
   const paths = series
@@ -393,12 +400,12 @@ function renderLineChart(svg, series, opts = {}) {
 
 function renderTimeline() {
   const pair = currentPair();
-  $("timeline").innerHTML = pair.jev.steps
+  $("timeline").innerHTML = pair.jev.decisions
     .map((jev, i) => {
-      const dash = pair.dashscope.steps[i];
+      const dash = pair.dashscope.decisions[i];
       return `
-        <button class="timeline-step" data-step="${i}">
-          <div class="t">t+${i}s</div>
+        <button class="timeline-step" data-second="${i}" data-step="${jev.frame_start}">
+          <div class="t">${formatTime(i)}</div>
           <div class="timeline-model">
             <span class="timeline-dot jev"></span>
             <span class="timeline-code" title="${labelEvent(jev.sampled_event)} / ${labelAction(jev.sampled_action)}">${short(jev.sampled_event)} · ${short(jev.sampled_action)}</span>
@@ -419,7 +426,16 @@ function renderTimeline() {
   );
 }
 
+function formatTime(seconds) {
+  const whole = Math.floor(seconds);
+  const min = Math.floor(whole / 60);
+  const sec = whole % 60;
+  const tenth = Math.floor((seconds - whole) * 10);
+  return `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}.${tenth}`;
+}
+
 function pct(v) {
+  if (v == null) return "–";
   return `${(v * 100).toFixed(v < 0.1 ? 1 : 0)}%`;
 }
 function labelEvent(k) {
