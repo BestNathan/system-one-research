@@ -1,16 +1,6 @@
 name: two-minute probability worlds
 
 on:
-  push:
-    branches:
-      - main
-      - research/two-minute-probability-world
-    paths:
-      - ".github/workflows/two-minute-probability-world.yml"
-      - "experiments/driving_probability/run_two_minute_world.py"
-      - "experiments/driving_probability/test_two_minute_world.py"
-      - "scripts/build_two_minute_pages_data.py"
-      - "site/**"
   workflow_dispatch:
     inputs:
       worldlines:
