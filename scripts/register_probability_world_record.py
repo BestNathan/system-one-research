@@ -32,6 +32,7 @@ def main():
         "duration_seconds": meta.get("duration_seconds"),
         "physics_fps": meta.get("physics_fps"),
         "decision_hz": meta.get("decision_hz"),
+        "runtime_variant": meta.get("runtime_variant"),
         "models": {
             "jev": record["summary"]["jev"].get("reported_model"),
             "dashscope": record["summary"]["dashscope"].get("reported_model"),
