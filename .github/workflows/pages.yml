@@ -1,0 +1,79 @@
+name: deploy probability world pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "scripts/build_probabilistic_world_pages_data.py"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: probability-world-pages
+  cancel-in-progress: true
+
+env:
+  PROBABILITY_WORLD_RUN_ID: "36602604927"
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Jev probability worlds
+        uses: actions/download-artifact@v4
+        with:
+          name: probabilistic-world-jev
+          path: _artifacts/jev
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ env.PROBABILITY_WORLD_RUN_ID }}
+
+      - name: Download DashScope probability worlds
+        uses: actions/download-artifact@v4
+        with:
+          name: probabilistic-world-dashscope
+          path: _artifacts/dashscope
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ env.PROBABILITY_WORLD_RUN_ID }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build compact Pages replay data
+        run: |
+          python scripts/build_probabilistic_world_pages_data.py \
+            --jev-summary _artifacts/jev/summary.json \
+            --dashscope-summary _artifacts/dashscope/summary.json \
+            --jev-worldlines _artifacts/jev/worldlines.jsonl \
+            --dashscope-worldlines _artifacts/dashscope/worldlines.jsonl \
+            --run-id "$PROBABILITY_WORLD_RUN_ID" \
+            --output site/data/probability-world.json \
+            --max-worldlines 56
+          test -s site/data/probability-world.json
+          du -h site/data/probability-world.json
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
