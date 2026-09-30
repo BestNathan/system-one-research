@@ -17,7 +17,7 @@ from run_probabilistic_world import sample_distribution, usage_tokens
 
 
 DEFAULT_SEED = 20260930
-RUNTIME_VARIANT = "v3-safe-cruise"
+RUNTIME_VARIANT = "v3b-safe-cruise-envelope"
 
 ACTION_ACCEL_MPS2 = {
     "hard_brake": -4.5,
@@ -110,6 +110,10 @@ def initial_state(
             "action_prediction_horizon_seconds": ACTION_PREDICTION_HORIZON_SECONDS,
             "hard_invariant": "front_gap_m >= min_gap_m whenever a front vehicle exists",
             "shield": "per-frame control barrier",
+            "speed_envelope": (
+                "dynamic action-space shaping that restores the cruise deadband "
+                "without weakening the minimum-gap invariant"
+            ),
         },
         "recent_history": {
             "events": [],
@@ -326,6 +330,73 @@ def apply_event(state: dict[str, Any], event: str) -> None:
         )
 
 
+def one_second_speed_mph(speed_mph: float, action: str) -> float:
+    speed_mps = max(
+        0.0,
+        mph_to_mps(speed_mph) + ACTION_ACCEL_MPS2[action],
+    )
+    return mps_to_mph(speed_mps)
+
+
+def apply_speed_envelope(
+    state: dict[str, Any],
+    gap_safe_actions: list[str],
+) -> list[str]:
+    """Keep the stochastic policy inside a cruise-speed restoring envelope.
+
+    Distance safety remains the hard constraint. This second envelope is a control
+    objective: when the road is clear it does not let the probabilistic policy keep
+    accelerating away from the target or remain parked far below it.
+    """
+    speed = float(state["ego"]["speed_mph"])
+    target = float(state["cruise"]["target_speed_mph"])
+    deadband = float(state["cruise"]["speed_deadband_mph"])
+    front = state["road"].get("front_vehicle")
+
+    lower = target - deadband
+    upper = target + deadband
+    selected = list(gap_safe_actions)
+    mode = "following-safety-first" if front is not None else "cruise-deadband"
+
+    if speed > upper:
+        restoring = [
+            a for a in selected if ACTION_ACCEL_MPS2[a] < 0.0
+        ]
+        if restoring:
+            selected = restoring
+            mode = "overspeed-restore"
+    elif front is None and speed < lower:
+        restoring = [
+            a for a in selected if ACTION_ACCEL_MPS2[a] > 0.0
+        ]
+        if restoring:
+            selected = restoring
+            mode = "underspeed-restore"
+    elif front is None:
+        band_preserving = [
+            a
+            for a in selected
+            if lower - 1e-9
+            <= one_second_speed_mph(speed, a)
+            <= upper + 1e-9
+        ]
+        if band_preserving:
+            selected = band_preserving
+            mode = "cruise-band-hold"
+    elif speed > target:
+        non_accelerating = [
+            a for a in selected if ACTION_ACCEL_MPS2[a] <= 0.0
+        ]
+        if non_accelerating:
+            selected = non_accelerating
+            mode = "following-no-overspeed"
+
+    state["control_state"]["gap_safe_actions"] = list(gap_safe_actions)
+    state["control_state"]["speed_envelope_actions"] = list(selected)
+    state["control_state"]["speed_envelope_mode"] = mode
+    return selected
+
+
 def safe_action_space(
     state: dict[str, Any],
     physics_fps: int,
@@ -333,7 +404,7 @@ def safe_action_space(
     min_gap = float(state["cruise"]["min_gap_m"])
     speed = float(state["ego"]["speed_mph"])
     predicted: dict[str, float | None] = {}
-    safe: list[str] = []
+    gap_safe: list[str] = []
 
     for action in ACTION_ORDER:
         if speed <= LOW_SPEED_BRAKE_MASK_MPH and action in ("hard_brake", "brake"):
@@ -348,11 +419,12 @@ def safe_action_space(
         )
         predicted[action] = None if min_predicted == float("inf") else min_predicted
         if min_predicted >= min_gap - 1e-9:
-            safe.append(action)
+            gap_safe.append(action)
 
-    if not safe:
-        safe = ["hard_brake"]
-    return safe, predicted
+    if not gap_safe:
+        gap_safe = ["hard_brake"]
+
+    return apply_speed_envelope(state, gap_safe), predicted
 
 
 def actor_question(
