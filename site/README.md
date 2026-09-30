@@ -41,3 +41,8 @@ and prepends metadata to:
 The experiment page loads that manifest and lets the viewer switch between saved iterations with `?run=<workflow-run-id>`.
 
 Keep the random seed fixed when comparing runtime/model changes so the sampled uniform streams stay matched across iterations. Change the seed only when intentionally exploring a different stochastic realization.
+
+
+### Pre-persistence runs
+
+Compatible probability-world runs created before persistent run recording was introduced can be migrated from retained GitHub Actions artifacts into the same `runs/<run-id>/record.json` history. The original two-minute baseline run #36682237914 has been migrated this way.
