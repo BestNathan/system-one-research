@@ -90,6 +90,7 @@ class SafeCruiseWorldTest(unittest.TestCase):
 
     def test_overspeed_clear_road_forces_negative_actions(self):
         state = self.make_state()
+        state["road"]["front_vehicle"] = None
         state["ego"]["speed_mph"] = 90.0
         refresh_control_state(state, 12)
         actions = apply_speed_envelope(
@@ -101,6 +102,7 @@ class SafeCruiseWorldTest(unittest.TestCase):
 
     def test_underspeed_clear_road_forces_positive_actions(self):
         state = self.make_state()
+        state["road"]["front_vehicle"] = None
         state["ego"]["speed_mph"] = 60.0
         refresh_control_state(state, 12)
         actions = apply_speed_envelope(
@@ -111,6 +113,7 @@ class SafeCruiseWorldTest(unittest.TestCase):
 
     def test_cruise_band_does_not_allow_one_second_overshoot(self):
         state = self.make_state()
+        state["road"]["front_vehicle"] = None
         state["ego"]["speed_mph"] = 80.0
         refresh_control_state(state, 12)
         actions = apply_speed_envelope(
